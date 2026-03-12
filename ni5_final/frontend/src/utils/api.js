@@ -1,5 +1,7 @@
 import axios from 'axios'
 
+axios.defaults.baseURL = 'https://ns-production-9041.up.railway.app'
+
 export const Auth = {
   login:    (u, p)    => axios.post('/api/auth/login',    { username: u, password: p }),
   register: (u, e, p) => axios.post('/api/auth/register', { username: u, email: e, password: p }),
