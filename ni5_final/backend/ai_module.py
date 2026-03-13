@@ -12,7 +12,7 @@ def _call_claude(prompt: str, system: str = "", max_tokens: int = 600) -> str | 
         import anthropic
         client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
         r = client.messages.create(
-            model="claude-opus-4-5",
+            model="claude-haiku-4-5-20251001",
             max_tokens=max_tokens,
             system=system or (
                 "You are NestInsights AI — a senior consumer intelligence analyst. "
@@ -325,7 +325,7 @@ def ai_chat(question: str, context: dict, history: list = None) -> str:
             if text and role in ("user", "assistant"):
                 messages.append({"role": role, "content": text})
         messages.append({"role": "user", "content": question})
-        r = client.messages.create(model="claude-opus-4-5", max_tokens=400, system=SYSTEM, messages=messages)
+        r = client.messages.create(model="claude-haiku-4-5-20251001", max_tokens=400, system=SYSTEM, messages=messages)
         return r.content[0].text if r.content else _fallback_chat(question, context)
     except Exception as e:
         err = str(e).lower()
