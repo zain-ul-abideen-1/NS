@@ -83,6 +83,37 @@ SENTIMENT_TRAIN = [
     ("Very impressed with the overall quality and finish.", "positive"),
     ("Smooth purchase experience, will buy from here again.", "positive"),
 
+    # Complex positive sentences — grateful, professional, long-form praise
+    ("I cannot express enough how grateful I am for all the help and support provided. From the very beginning, the highest level of professionalism was shown.", "positive"),
+    ("I cannot express how grateful I am for all the help. The professionalism shown has been outstanding.", "positive"),
+    ("I am so grateful for the support provided. The professionalism and patience shown was exceptional.", "positive"),
+    ("Words cannot express how grateful I am for the help and support. Truly professional and caring service.", "positive"),
+    ("I always have a pleasant experience because the staff never get aggravated when I repeat myself. Thankyou.", "positive"),
+    ("I always have a pleasant experience specially because they are patient and understanding. Thank you.", "positive"),
+    ("I always have a wonderful experience with the team. They are so patient and professional.", "positive"),
+    ("Always a pleasant and positive experience. The staff are incredibly patient and understanding.", "positive"),
+    ("The staff are incredibly patient and never make me feel rushed or ignored. Always a pleasure.", "positive"),
+    ("She has shown the highest level of professionalism, patience and understanding throughout.", "positive"),
+    ("He has shown the highest level of professionalism from the very beginning. Truly grateful.", "positive"),
+    ("The team showed the highest level of professionalism and I am very grateful for their help.", "positive"),
+    ("From the very beginning they showed exceptional professionalism and patience. Highly recommend.", "positive"),
+    ("What an incredible experience. The support team was professional, patient, and truly caring.", "positive"),
+    ("I want to express my deepest gratitude for the exceptional support I received. Outstanding service.", "positive"),
+    ("Thank you so much for everything. The help and support I received was absolutely incredible.", "positive"),
+    ("Truly impressed by the patience and professionalism of the entire team. Grateful for the experience.", "positive"),
+    ("The team went above and beyond. I cannot thank them enough for their patience and dedication.", "positive"),
+    ("I am amazed by the level of care and professionalism shown throughout this entire process.", "positive"),
+    ("Such a wonderful experience. The staff were patient, kind, and incredibly professional throughout.", "positive"),
+    ("They were so understanding and patient. I really appreciate the level of service I received.", "positive"),
+    ("The service was outstanding. I have never experienced such professionalism and genuine care.", "positive"),
+    ("I am truly grateful for the support and guidance. The staff are exceptional and very professional.", "positive"),
+    ("What a fantastic team. Patient, professional, and always willing to help. Highly recommend.", "positive"),
+    ("Exceptional customer support from start to finish. Patient, professional, and genuinely helpful.", "positive"),
+    ("The representative was patient, professional, and resolved everything quickly. Very impressed.", "positive"),
+    ("Brilliant service and incredibly patient staff. I always feel valued as a customer here.", "positive"),
+    ("Cannot fault the service at all. Professional, friendly, and patient. Highly satisfied.", "positive"),
+    ("The staff are always warm, welcoming, and professional. I always leave feeling satisfied.", "positive"),
+    ("I feel genuinely cared for every time I interact with this team. Outstanding professionalism.", "positive"),
     # Additional targeted samples for tricky cases
     ("This product is amazing and works perfectly!", "positive"),
     ("This is amazing, could not be happier.", "positive"),
@@ -801,11 +832,70 @@ def _sla_label(hours: int) -> str:
 # PUBLIC: REVIEW SENTIMENT ANALYSIS
 # ──────────────────────────────────────────────────────────
 
+def _sentiment_override(text: str) -> str | None:
+    """
+    Hard rule-based override for patterns the ML consistently gets wrong.
+    Returns 'positive', 'negative', or None (defer to ML).
+    """
+    tl = text.lower()
+
+    # Strong positive phrases — if ANY match, it's positive regardless of ML
+    strong_pos = [
+        "cannot express enough", "can't express enough",
+        "so grateful", "truly grateful", "deeply grateful", "very grateful",
+        "express my gratitude", "express enough gratitude",
+        "highest level of professionalism", "highest level of service",
+        "always have a pleasant", "always a pleasant",
+        "don't get aggravated", "do not get aggravated", "never get aggravated",
+        "patient and understanding", "professional and patient",
+        "professionalism and patience", "professionalism, patience",
+        "went above and beyond", "above and beyond",
+        "exceeded all my expectations", "exceeded expectations",
+        "cannot recommend enough", "can't recommend enough",
+        "absolutely love", "truly amazing", "genuinely impressed",
+        "i am amazed", "i was amazed", "truly outstanding",
+        "outstanding professionalism", "exceptional professionalism",
+        "exceptional service", "exceptional support", "exceptional experience",
+        "wonderful experience", "fantastic experience", "brilliant experience",
+        "so impressed", "very impressed", "highly impressed",
+        "thank you so much", "thankyou so much",
+        "i am grateful", "i'm grateful", "feeling grateful",
+        "professionalism was outstanding", "professionalism was exceptional",
+        "from the very beginning", # almost always in positive context
+    ]
+    for phrase in strong_pos:
+        if phrase in tl:
+            return "positive"
+
+    # Strong negative — hard override to negative
+    strong_neg = [
+        "worst purchase", "worst experience", "worst service",
+        "complete waste of money", "total waste of money", "waste of money",
+        "never buy again", "never buying again",
+        "absolutely terrible", "absolutely awful", "absolutely horrible",
+        "this is a scam", "it's a scam", "its a scam",
+        "demanding a refund", "demand a refund", "demanding my money back",
+        "legal action", "going to sue", "filing a complaint",
+        "completely broken", "arrived broken", "broken on arrival",
+        "refused to help", "refuses to help", "refused to refund",
+        "do not buy", "don't buy", "avoid at all costs",
+        "deeply disappointed", "extremely disappointed", "very disappointed",
+    ]
+    for phrase in strong_neg:
+        if phrase in tl:
+            return "negative"
+
+    return None  # defer to ML
+
+
 def analyze_review(text: str, original_text: str = None) -> dict:
     if not text or not text.strip():
         return {}
     t = text.strip()
     tl = t.lower()
+
+    # ── Step 1: Hard rule override (highest priority) ──────────────
+    override = _sentiment_override(t)
 
     # ML prediction with probability
     probs = _SENT_MODEL.predict_proba([t])[0]
@@ -815,33 +905,39 @@ def analyze_review(text: str, original_text: str = None) -> dict:
     ml_sentiment = classes[np.argmax(probs)]
     ml_confidence = float(np.max(probs))
 
-    # Lexical backup for short texts
+    # Lexical backup
     lex_score, pos_w, neg_w = _lexical_sentiment(t)
+    ml_diff = prob_map.get("positive", 0) - prob_map.get("negative", 0)
 
-    ml_diff = prob_map.get("positive",0) - prob_map.get("negative",0)
-
-    # Weighted fusion — trust lexical when it's clear-cut
-    word_count = len(t.split())
-    if word_count <= 12 and abs(lex_score) > 0.25:
-        # Clear lexical signal on short text: 60% lexical, 40% ML
-        final_compound = lex_score * 0.60 + ml_diff * 0.40
-    elif abs(lex_score) > 0.4:
-        # Strong lexical signal: 50/50
-        final_compound = lex_score * 0.50 + ml_diff * 0.50
+    # ── Step 2: If rule override fired, use it — skip ML entirely ──
+    if override is not None:
+        sentiment = override
+        if override == "positive":
+            final_compound = max(0.15, ml_diff * 0.3 + abs(lex_score) * 0.7)
+        elif override == "negative":
+            final_compound = min(-0.15, ml_diff * 0.3 - abs(lex_score) * 0.7)
+        else:
+            final_compound = 0.0
+        final_compound = max(-1.0, min(1.0, final_compound))
     else:
-        # Default: ML dominates
-        final_compound = ml_diff * 0.75 + lex_score * 0.25
+        # ── Step 3: Normal ML + lexical fusion ──────────────────────
+        word_count = len(t.split())
+        if word_count <= 12 and abs(lex_score) > 0.25:
+            final_compound = lex_score * 0.60 + ml_diff * 0.40
+        elif abs(lex_score) > 0.4:
+            final_compound = lex_score * 0.50 + ml_diff * 0.50
+        else:
+            final_compound = ml_diff * 0.75 + lex_score * 0.25
 
-    final_compound = max(-1.0, min(1.0, final_compound))
+        final_compound = max(-1.0, min(1.0, final_compound))
 
-    # Use ML sentiment label when both agree, else use compound
-    if ml_sentiment == "positive" and lex_score >= -0.1:
-        sentiment = "positive"
-    elif ml_sentiment == "negative" and lex_score <= 0.1:
-        sentiment = "negative"
-    elif final_compound > 0.08:   sentiment = "positive"
-    elif final_compound < -0.08:  sentiment = "negative"
-    else:                          sentiment = "neutral"
+        if ml_sentiment == "positive" and lex_score >= -0.1:
+            sentiment = "positive"
+        elif ml_sentiment == "negative" and lex_score <= 0.1:
+            sentiment = "negative"
+        elif final_compound > 0.08:  sentiment = "positive"
+        elif final_compound < -0.08: sentiment = "negative"
+        else:                         sentiment = "neutral"
 
     confidence = min(0.99, ml_confidence * 0.8 + abs(final_compound) * 0.2)
 
