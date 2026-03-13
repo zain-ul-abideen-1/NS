@@ -1,4 +1,4 @@
-"""NestInsights v5 — Sentiment Engine with Authenticity Detection & Smart Response Generator"""
+"""NestInsights v5v — Sentiment Engine with Authenticity Detection & Smart Response Generator"""
 import re
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from textblob import TextBlob
