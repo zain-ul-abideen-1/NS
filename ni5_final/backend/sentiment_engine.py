@@ -164,6 +164,50 @@ def _suggest_response(sentiment):
     templates = RESPONSE_TEMPLATES.get(sentiment, RESPONSE_TEMPLATES["neutral"])
     return random.choice(templates)
 
+def _rule_based_override(text: str) -> float:
+    """
+    Rule-based sentiment correction layer.
+    Returns an adjustment to add to compound score.
+    Fixes VADER/TextBlob failures on complex positive sentences.
+    """
+    tl = text.lower()
+    adjustment = 0.0
+
+    # Strong positive phrases — if ANY of these are present, strongly boost positive
+    strong_positive = [
+        "pleasant experience", "great experience", "wonderful experience", "amazing experience",
+        "excellent experience", "love it", "love the", "highly recommend", "very helpful",
+        "so helpful", "extremely helpful", "incredibly helpful", "very kind", "so kind",
+        "thank you", "thankyou", "grateful", "cannot express", "express enough",
+        "highest level", "professionalism", "truly appreciate", "best", "outstanding",
+        "exceeded", "exceeded my expectations", "well done", "great job", "fantastic",
+        "very pleased", "very happy", "very satisfied", "extremely satisfied",
+        "don't get aggravated", "do not get aggravated", "not get aggravated",
+        "patient", "patience", "understanding", "compassionate", "caring",
+        "i always have", "always have a", "pleasant", "enjoy", "enjoyed",
+        "appreciate", "appreciated", "impressed", "delighted", "glad",
+    ]
+    for phrase in strong_positive:
+        if phrase in tl:
+            adjustment += 0.25
+            break  # one match is enough for a big boost
+
+    # Explicit negative phrases — only penalize for these, not ambiguous words
+    strong_negative = [
+        "terrible experience", "worst experience", "horrible experience",
+        "very disappointed", "extremely disappointed", "totally disappointed",
+        "complete waste", "waste of money", "never buy again", "never again",
+        "scam", "fraud", "broken", "stopped working", "doesn't work", "does not work",
+        "refund", "return this", "very bad", "very poor", "absolutely terrible",
+        "absolutely horrible", "awful", "disgusting service", "rude staff",
+        "rude employee", "not satisfied", "completely wrong", "damaged",
+    ]
+    neg_count = sum(1 for phrase in strong_negative if phrase in tl)
+    adjustment -= neg_count * 0.3
+
+    return max(-0.8, min(0.8, adjustment))
+
+
 def analyze_review(text: str, original_text: str = None) -> dict:
     if not text or not text.strip():
         return {}
@@ -171,7 +215,14 @@ def analyze_review(text: str, original_text: str = None) -> dict:
     vs = vader.polarity_scores(t)
     tb = TextBlob(t)
     tb_pol = tb.sentiment.polarity
+
+    # Base compound from VADER + TextBlob
     compound = vs["compound"] * 0.65 + tb_pol * 0.35
+
+    # Apply rule-based correction to fix misclassifications
+    correction = _rule_based_override(t)
+    compound = max(-1.0, min(1.0, compound + correction))
+
     if compound > 0.05:
         sentiment, pos_p, neg_p, neu_p = "positive", min(0.99, 0.65 + compound * 0.3), 0.1, max(0.01, 0.25 - compound * 0.1)
     elif compound < -0.05:
