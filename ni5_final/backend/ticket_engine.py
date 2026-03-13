@@ -213,4 +213,4 @@ def ticket_summary(results):
         "escalate_pct":    round(escalate_count / total * 100, 1),
         "top_category":    top_category,
         "needs_attention": critical_count + high_count,
-    }
+    } 

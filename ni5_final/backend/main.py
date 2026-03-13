@@ -2372,3 +2372,4 @@ def refresh_intelligence():
     """Force refresh the AI intelligence cache."""
     _gi_cache["ts"] = 0  # Expire cache
     return get_ai_intelligence()
+ 

@@ -643,4 +643,4 @@ export default function GlobalIntelligence() {
       </div>
     </div>
   )
-}
+}  
