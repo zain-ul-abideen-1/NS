@@ -377,7 +377,7 @@ async def analyze_dataset(
     col = text_col or _detect_text_col(df)
     if not col or col not in df.columns:
         raise HTTPException(400, f"Column not found. Available: {list(df.columns)}")
-    texts = [str(t).strip() for t in df[col].dropna().tolist() if str(t).strip() and str(t) != "nan"]
+    texts = [str(t).strip() for t in df[col].dropna().tolist() if str(t).strip() and str(t) != "nan"][:500]
     if not texts:
         raise HTTPException(400, "No valid text rows found")
     results = batch_analyze(texts)
@@ -717,7 +717,7 @@ async def ticket_upload(
     col = text_col or _detect_text_col(df)
     if not col or col not in df.columns:
         raise HTTPException(400, f"Text column not found. Columns: {list(df.columns)}")
-    texts = [str(t).strip() for t in df[col].dropna().tolist() if str(t).strip() and str(t) != "nan"]
+    texts = [str(t).strip() for t in df[col].dropna().tolist() if str(t).strip() and str(t) != "nan"][:500]
     if not texts:
         raise HTTPException(400, "No valid text rows found")
     results = batch_classify(texts)
