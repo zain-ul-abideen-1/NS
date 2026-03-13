@@ -10,7 +10,7 @@ import {
   AlertTriangle, ChevronRight, Eye, Package, Star, Filter,
   Minus, Search, BarChart2, Newspaper
 } from 'lucide-react'
-import api from '../utils/api'
+import axios from 'axios'
 
 // ── Helpers ────────────────────────────────────────────────────
 const URGENCY_COLOR = { critical: '#ef4444', high: '#f97316', medium: '#f59e0b', low: '#10b981' }
@@ -76,16 +76,15 @@ export default function GlobalIntelligence() {
     forceRefresh ? setRefreshing(true) : setLoading(true)
     setAiThinking(true)
     try {
-      const endpoint = forceRefresh
-        ? '/api/global/refresh-intelligence'
-        : '/api/global/ai-intelligence'
-      const method = forceRefresh ? 'post' : 'get'
-      const res = await api[method](endpoint)
-      setData(res.data)
-      setLastUpdated(new Date())
-      setCountdown(900)
-      if (res.data?.products?.length) setSelected(res.data.products[0])
-    } catch (e) {
+  const endpoint = forceRefresh
+    ? '/api/global/refresh-intelligence'
+    : '/api/global/ai-intelligence'
+  const res = forceRefresh ? await axios.post(endpoint) : await axios.get(endpoint)
+  setData(res.data)
+  setLastUpdated(new Date())
+  setCountdown(900)
+  if (res.data?.products?.length) setSelected(res.data.products[0])
+  } catch (e) {
       console.error(e)
     }
     setLoading(false)
