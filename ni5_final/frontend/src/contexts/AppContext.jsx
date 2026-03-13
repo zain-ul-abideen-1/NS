@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import axios from 'axios'
+import { applyLanguage, initTranslation } from '../i18n'
 
 const Ctx = createContext(null)
 
@@ -11,6 +12,9 @@ export function AppProvider({ children }) {
   const [loading, setLoading]  = useState(true)
   const [alerts,  setAlerts]   = useState([])
 
+  // Bootstrap Google Translate on app start
+  useEffect(() => { initTranslation() }, [])
+
   // Apply theme class
   useEffect(() => {
     const html = document.documentElement
@@ -18,10 +22,9 @@ export function AppProvider({ children }) {
     else                   { html.classList.add('dark');   html.classList.remove('light') }
   }, [theme])
 
-  // Apply RTL for Urdu
+  // Apply Google Translate + RTL whenever language changes
   useEffect(() => {
-    document.documentElement.dir = lang === 'ur' ? 'rtl' : 'ltr'
-    document.documentElement.lang = lang
+    if (lang) applyLanguage(lang)
   }, [lang])
 
   // Axios auth header
