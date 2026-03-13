@@ -225,7 +225,7 @@ def _parse_generic(soup):
                 reviews.append({"text": t, "author": "", "rating": 0, "date": ""})
             if len(reviews) >= 40:
                 break
-    return reviews[:100]
+    return reviews[:300]
 
 
 def scrape_reviews(url: str) -> dict:

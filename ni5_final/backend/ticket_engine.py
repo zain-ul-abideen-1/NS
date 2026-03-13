@@ -1,9 +1,18 @@
 """NestInsights v5 — Customer Support Ticket Classification Engine"""
 import re
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
-from textblob import TextBlob
 
-vader = SentimentIntensityAnalyzer()
+# Pure rule-based sentiment — no external NLP deps needed
+_POS_WORDS = set("good great excellent amazing wonderful fantastic love loved perfect happy pleased satisfied awesome brilliant outstanding superb thank thanks appreciated helpful working fixed resolved quick fast easy smooth".split())
+_NEG_WORDS = set("bad terrible awful horrible worst hate hated broken failed error crash bug slow problem issue wrong missing damaged defective disappointed frustrating angry upset useless terrible poor worst never refund".split())
+
+def _simple_sentiment(text):
+    words = text.lower().split()
+    pos = sum(1 for w in words if w in _POS_WORDS)
+    neg = sum(1 for w in words if w in _NEG_WORDS)
+    score = (pos - neg) / max(len(words), 1) * 5
+    if score > 0.05:   return "positive", round(score, 4)
+    elif score < -0.05: return "negative", round(score, 4)
+    else:               return "neutral",  round(score, 4)
 
 STOPWORDS = set("the a an is was were be been have has had do does did will would could should i me my we you your he she it its they them this that and but or so yet for to of in on at by with".split())
 
@@ -111,13 +120,8 @@ def classify_ticket(text: str, customer_name: str = "Customer") -> dict:
     # Escalate flag
     escalate = priority == "critical" or category == "Complaint / Abuse"
 
-    # Sentiment
-    vs = vader.polarity_scores(t)
-    tb = TextBlob(t)
-    compound = vs["compound"] * 0.65 + tb.sentiment.polarity * 0.35
-    if compound > 0.05:    sentiment = "positive"
-    elif compound < -0.05: sentiment = "negative"
-    else:                  sentiment = "neutral"
+    # Sentiment — pure rule-based, no external deps
+    sentiment, compound = _simple_sentiment(t)
 
     # Urgency
     urgency = {"critical": 0.95, "high": 0.75, "medium": 0.50, "low": 0.20}[priority]

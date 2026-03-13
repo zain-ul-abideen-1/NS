@@ -1,117 +1,32 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  LineChart, Line, BarChart, Bar, AreaChart, Area, RadarChart, Radar,
-  PolarGrid, PolarAngleAxis, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  CartesianGrid, Cell, Legend, ScatterChart, Scatter, ZAxis
+  AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip,
+  ResponsiveContainer, CartesianGrid, Cell
 } from 'recharts'
 import {
-  Globe2, TrendingUp, TrendingDown, Zap, AlertTriangle, Brain,
-  BarChart2, Search, RefreshCw, ChevronDown, MapPin, Clock,
-  Flame, Shield, Activity, Package, Star, ArrowUpRight,
-  ArrowDownRight, Minus, Info, Filter, ChevronRight, Lightbulb,
-  Radio, Target, Eye, Cpu
+  Globe2, TrendingUp, TrendingDown, Zap, Brain, RefreshCw,
+  Flame, Activity, ArrowUpRight, Clock, Sparkles, Radio,
+  AlertTriangle, ChevronRight, Eye, Package, Star, Filter,
+  Minus, Search, BarChart2, Newspaper
 } from 'lucide-react'
+import api from '../utils/api'
 
-// ── Data Helpers ─────────────────────────────────────────────────
-const REGIONS = ['Global','North America','Europe','Middle East','South Asia','East Asia','Africa','Latin America']
-
-const GLOBAL_EVENTS = [
-  { id:'covid', icon:'🦠', label:'COVID-19 Resurgence',      type:'health',    severity:'critical', region:'Global',      impact:'high',   color:'#ef4444' },
-  { id:'iran_israel', icon:'⚔️', label:'Iran-Israel Conflict', type:'geopolitical', severity:'high',  region:'Middle East', impact:'high',   color:'#f97316' },
-  { id:'ukraine', icon:'🌍',  label:'Ukraine-Russia War',    type:'geopolitical', severity:'high',  region:'Europe',      impact:'medium', color:'#f97316' },
-  { id:'flood', icon:'🌊',   label:'Monsoon Flooding',       type:'climate',   severity:'medium',  region:'South Asia',  impact:'medium', color:'#60a5fa' },
-  { id:'heatwave', icon:'🌡️', label:'Global Heatwave',       type:'climate',   severity:'medium',  region:'Global',      impact:'medium', color:'#facc15' },
-  { id:'recession', icon:'📉', label:'Economic Slowdown',    type:'economic',  severity:'high',    region:'Global',      impact:'high',   color:'var(--sky2,#38bdf8)' },
-  { id:'election', icon:'🗳️', label:'US Presidential Election',type:'political',severity:'medium',  region:'North America',impact:'low',   color:'#10b981' },
-  { id:'chip_war', icon:'💻', label:'Chip Export Restrictions',type:'trade',   severity:'high',    region:'East Asia',   impact:'high',   color:'#ec4899' },
-]
-
-const PRODUCT_UNIVERSE = [
-  // Health & Medical
-  { id:'n95_masks',      name:'3M N95 Respirator Masks',        category:'Health',     baseScore:38, emoji:'😷', price:'$28/box', margin:'62%', stockLevel:'low',    events:['covid'],                       insight:'N95 specifically (not surgical) surge 1200% in respiratory outbreaks. Pre-position 3M supply contracts before health alerts escalate. Middle East + South Asia top demand zones.' },
-  { id:'pulse_ox',       name:'Pulse Oximeters',                category:'Health',     baseScore:35, emoji:'💉', price:'$22',     margin:'55%', stockLevel:'medium', events:['covid'],                       insight:'COVID-19 triggers home monitoring demand. Sales velocity tracks exactly with hospitalization rates. Bundle with thermometers for 3x basket value.' },
-  { id:'hand_sanitizer', name:'Dettol Hand Sanitizer 500ml',    category:'Health',     baseScore:42, emoji:'🧴', price:'$8',      margin:'48%', stockLevel:'high',   events:['covid'],                       insight:'Sanitizer demand has a 6-week lead time on COVID surges. Stockpile at first outbreak signals. Dettol brand commands 40% premium over generic.' },
-  { id:'ibuprofen',      name:'Ibuprofen 400mg (OTC)',          category:'Health',     baseScore:55, emoji:'💊', price:'$12',     margin:'58%', stockLevel:'medium', events:['covid','heatwave'],            insight:'Dual demand driver: fever management in COVID + pain relief in heatwaves. Consistent baseline with 3x spike potential. High-margin category.' },
-  { id:'water_filter',   name:'Brita Water Filter Pitcher',     category:'Health',     baseScore:40, emoji:'💧', price:'$45',     margin:'52%', stockLevel:'medium', events:['flood','heatwave'],            insight:'Flood contamination events cause 500% regional demand spikes. Lead 4-6 weeks. South Asia & Africa have structural water quality demand independent of events.' },
-
-  // Energy & Power
-  { id:'portable_gen',   name:'Honda 2200W Portable Generator',  category:'Energy',     baseScore:42, emoji:'⚡', price:'$1100',   margin:'28%', stockLevel:'low',    events:['ukraine','flood'],            insight:'Power infrastructure attacks or flood damage creates 6-18 month sustained demand. Honda premium justified — customers pay more for reliability in emergencies. Pre-order inventory before winter conflicts.' },
-  { id:'solar_panel',    name:'400W Monocrystalline Solar Panel', category:'Energy',     baseScore:58, emoji:'☀️', price:'$280',    margin:'35%', stockLevel:'medium', events:['heatwave','ukraine'],         insight:'European energy crisis drove 400% solar demand. Heatwaves push cooling costs up, accelerating solar ROI math for consumers. EU subsidies magnify demand. 18-month lead time on inventory.' },
-  { id:'power_bank',     name:'Anker 26800mAh Power Bank',       category:'Energy',     baseScore:62, emoji:'🔋', price:'$65',     margin:'45%', stockLevel:'medium', events:['ukraine','flood'],            insight:'Power bank demand spikes immediately during any grid disruption. Fast-moving inventory, high turns. Crisis scenarios last 2-12 weeks — plan restocking cadence accordingly.' },
-  { id:'fuel_canister',  name:'20L Jerry Can Fuel Canister',     category:'Energy',     baseScore:35, emoji:'⛽', price:'$35',     margin:'40%', stockLevel:'medium', events:['iran_israel','ukraine'],      insight:'Geopolitical events in oil-producing regions trigger hoarding behavior. 3-day demand windows before regulations kick in. Middle East demand is structural, not crisis-driven.' },
-
-  // Food & Grocery
-  { id:'rice_bulk',      name:'Basmati Rice 25kg Bulk Bag',      category:'Food',       baseScore:52, emoji:'🍚', price:'$48',     margin:'32%', stockLevel:'medium', events:['ukraine','flood'],            insight:'Staple food demand is near-inelastic. Ukraine war disrupted 30% of global grain supply. Rice demand surges in South Asia during monsoon disruptions. Logistics are the bottleneck, not supply.' },
-  { id:'canned_tuna',    name:'Princes Canned Tuna 6-Pack',      category:'Food',       baseScore:45, emoji:'🐟', price:'$14',     margin:'42%', stockLevel:'high',   events:['covid','recession'],          insight:'Shelf-stable protein is a recession hedge AND panic-buying staple. Tuna specifically sees 300% velocity in lockdowns. Keep 8-week inventory buffer year-round.' },
-  { id:'bread_flour',    name:'Strong White Bread Flour 16kg',   category:'Food',       baseScore:48, emoji:'🌾', price:'$22',     margin:'28%', stockLevel:'medium', events:['ukraine','recession'],        insight:'Ukraine produces 12% of global wheat. Direct correlation to bread flour pricing. Home baking surged 700% in COVID lockdowns. Dual demand driver.' },
-  { id:'cooking_oil',    name:'Sunflower Cooking Oil 5L',        category:'Food',       baseScore:50, emoji:'🫙', price:'$18',     margin:'30%', stockLevel:'low',    events:['ukraine','recession'],        insight:'Ukraine supplies 50% of global sunflower oil. Price increase 300% in 2022. Consumers substitute to palm oil. Position both for pricing arbitrage.' },
-
-  // Tech & Electronics
-  { id:'laptop',         name:'Lenovo IdeaPad 15" Laptop',       category:'Tech',       baseScore:65, emoji:'💻', price:'$680',    margin:'18%', stockLevel:'medium', events:['covid','chip_war'],           insight:'Chip shortage from export restrictions limits supply while demand stays constant. Each chip restriction tightening raises retail price floor 8-15%. Stock before announcements, not after.' },
-  { id:'webcam',         name:'Logitech C920 HD Webcam',          category:'Tech',       baseScore:60, emoji:'📷', price:'$85',     margin:'42%', stockLevel:'high',   events:['covid'],                      insight:'Work-from-home mandates create overnight demand surges. Logitech specifically sold out globally in 2020. 4-month lead time means positioning must precede lockdown declarations.' },
-  { id:'gpu',            name:'NVIDIA RTX 4060 Graphics Card',   category:'Tech',       baseScore:58, emoji:'🖥️', price:'$299',    margin:'15%', stockLevel:'low',    events:['chip_war'],                   insight:'US-China chip restrictions most directly impact NVIDIA supply chain. Price premium grows with each restriction cycle. Low margin but high volume + secondary market arbitrage.' },
-  { id:'smartphone',     name:'Samsung Galaxy A55 5G',           category:'Tech',       baseScore:70, emoji:'📱', price:'$380',    margin:'22%', stockLevel:'medium', events:['chip_war'],                   insight:'Mid-range Android demand is inelastic globally. Chip restrictions create supply floor but demand stays. South Asia & Africa are volume markets — prioritize SKUs for these regions.' },
-
-  // Apparel & Safety
-  { id:'rain_jacket',    name:'Columbia Waterproof Rain Jacket', category:'Apparel',    baseScore:35, emoji:'🧥', price:'$120',    margin:'55%', stockLevel:'medium', events:['flood'],                      insight:'Monsoon season demand is predictable and regional. South/East Asia peak in June-September. Columbia brand holds premium but generic alternatives serve price-sensitive markets adequately.' },
-  { id:'body_armor',     name:'Personal Safety Vest (Level II)', category:'Safety',     baseScore:30, emoji:'🛡️', price:'$180',    margin:'60%', stockLevel:'low',    events:['iran_israel','ukraine'],      insight:'Conflict proximity drives civilian safety gear demand. Israel-Iran tensions push demand in Middle East by 400%. Regulatory compliance by country is critical before stocking.' },
-  { id:'first_aid_kit',  name:'Complete First Aid Kit 200-Piece',category:'Safety',     baseScore:50, emoji:'🩹', price:'$48',     margin:'65%', stockLevel:'high',   events:['covid','flood','iran_israel'], insight:'Universal crisis product. Demand correlates with ANY emergency type. High margin, compact, non-perishable. Ideal anchor product for crisis inventory strategy.' },
-
-  // Appliances & Comfort
-  { id:'air_purifier',   name:'Dyson TP07 Air Purifier',         category:'Appliances', baseScore:55, emoji:'🌀', price:'$650',    margin:'40%', stockLevel:'medium', events:['covid','heatwave'],            insight:'Air quality anxiety drives purifier demand post-COVID. Wildfire smoke from climate events also drives spikes. Dyson brand loyalty strong — consumers rarely substitute down.' },
-  { id:'portable_ac',    name:'Portable Air Conditioner 12000BTU',category:'Appliances',baseScore:52, emoji:'❄️', price:'$450',    margin:'35%', stockLevel:'low',    events:['heatwave'],                   insight:'Heat emergency = AC demand surge within 48 hours. Portable units outsell window units in urban Europe & Asia (installation restrictions). Plan regional warehouse pre-positioning.' },
-  { id:'water_cooler',   name:'Water Dispenser & Cooler',        category:'Appliances', baseScore:45, emoji:'🚰', price:'$180',    margin:'38%', stockLevel:'medium', events:['heatwave','flood'],           insight:'Extreme heat + flood water contamination dual-drives water cooler demand. Rental model outperforms retail in South Asia markets. Keep 6-week regional inventory buffer.' },
-
-  // Services & Logistics
-  { id:'vpn_sub',        name:'NordVPN 2-Year Subscription',     category:'Services',   baseScore:60, emoji:'🔐', price:'$89',     margin:'78%', stockLevel:'N/A',    events:['chip_war','election'],        insight:'Geopolitical tensions and internet censorship fears spike VPN subscriptions. Digital product — zero inventory risk, infinite margin. Iran-conflict drives Middle East demand surge.' },
-  { id:'packaging',      name:'Corrugated Shipping Boxes (100pk)',category:'Services',   baseScore:65, emoji:'📦', price:'$85',     margin:'38%', stockLevel:'medium', events:['covid'],                      insight:'E-commerce surge from lockdowns created permanent packaging demand uplift. Supply chain disruptions raise box prices 60-80%. Pre-securing packaging contracts is competitive advantage.' },
-]
-
-const CITY_DATA = {
-  'Global':        [{city:'New York',score:78},{city:'London',score:72},{city:'Dubai',score:85},{city:'Shanghai',score:68},{city:'Karachi',score:60},{city:'Lagos',score:55},{city:'São Paulo',score:63},{city:'Tokyo',score:74}],
-  'North America': [{city:'New York',score:78},{city:'Los Angeles',score:75},{city:'Chicago',score:70},{city:'Toronto',score:72},{city:'Miami',score:68}],
-  'Europe':        [{city:'London',score:72},{city:'Berlin',score:70},{city:'Paris',score:74},{city:'Warsaw',score:65},{city:'Istanbul',score:78}],
-  'Middle East':   [{city:'Dubai',score:85},{city:'Riyadh',score:80},{city:'Tehran',score:62},{city:'Tel Aviv',score:71},{city:'Amman',score:68}],
-  'South Asia':    [{city:'Karachi',score:60},{city:'Mumbai',score:65},{city:'Delhi',score:63},{city:'Dhaka',score:58},{city:'Colombo',score:62}],
-  'East Asia':     [{city:'Shanghai',score:68},{city:'Tokyo',score:74},{city:'Seoul',score:76},{city:'Taipei',score:73},{city:'Singapore',score:80}],
-  'Africa':        [{city:'Lagos',score:55},{city:'Cairo',score:60},{city:'Nairobi',score:58},{city:'Johannesburg',score:62},{city:'Casablanca',score:57}],
-  'Latin America': [{city:'São Paulo',score:63},{city:'Buenos Aires',score:60},{city:'Mexico City',score:65},{city:'Bogotá',score:58},{city:'Lima',score:56}],
+// ── Helpers ────────────────────────────────────────────────────
+const URGENCY_COLOR = { critical: '#ef4444', high: '#f97316', medium: '#f59e0b', low: '#10b981' }
+const TREND_ICON = { rising: TrendingUp, falling: TrendingDown, stable: Minus }
+const TREND_COLOR = { rising: '#10b981', falling: '#ef4444', stable: '#6b7280' }
+const EVENT_COLORS = {
+  economic: '#f59e0b', technology: '#6366f1', climate: '#3b82f6',
+  health: '#ef4444', geopolitical: '#f97316', market: '#10b981',
+  trade: '#ec4899', energy: '#facc15',
 }
 
-const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-
-function generateTrendData(baseScore, eventMultipliers) {
-  return MONTHS.map((month, i) => {
-    let val = baseScore + Math.sin(i * 0.5) * 8 + (Math.random() - 0.5) * 12
-    const eventsApplied = eventMultipliers.filter((_, ei) => ei % 3 === i % 3)
-    eventsApplied.forEach(m => { val *= m })
-    return { month, demand: Math.max(10, Math.min(100, Math.round(val))), forecast: Math.max(10, Math.min(100, Math.round(val * (1 + (Math.random()-0.3)*0.2)))) }
-  })
-}
-
-function getEventMultipliers(product, activeEvents) {
-  const relevant = product.events.filter(e => activeEvents.includes(e))
-  return relevant.length > 0 ? [1.4, 1.6, 1.2].slice(0, relevant.length) : [1.0]
-}
-
-function calcDemandScore(product, activeEvents) {
-  const relevant = product.events.filter(e => activeEvents.includes(e))
-  const boost = relevant.length * 22
-  return Math.min(99, product.baseScore + boost + Math.floor(Math.random() * 8))
-}
-
-// ── Sub-components ───────────────────────────────────────────────
-const Badge = ({ color, children }) => (
-  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold text-white"
-    style={{background: color}}>{children}</span>
-)
-
-const ScoreRing = ({ score, size = 56 }) => {
+const ScoreRing = ({ score, size = 52 }) => {
   const r = (size - 8) / 2
   const circ = 2 * Math.PI * r
   const fill = (score / 100) * circ
-  const color = score >= 70 ? '#10b981' : score >= 50 ? '#f59e0b' : '#ef4444'
+  const color = score >= 75 ? '#ef4444' : score >= 55 ? '#f59e0b' : '#10b981'
   return (
     <svg width={size} height={size} className="flex-shrink-0">
       <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="var(--border)" strokeWidth="4"/>
@@ -119,560 +34,613 @@ const ScoreRing = ({ score, size = 56 }) => {
         strokeDasharray={`${fill} ${circ}`} strokeLinecap="round"
         transform={`rotate(-90 ${size/2} ${size/2})`}/>
       <text x={size/2} y={size/2+1} textAnchor="middle" dominantBaseline="middle"
-        fontSize={size > 40 ? 13 : 10} fontWeight="700" fill={color}>{score}</text>
+        fontSize={size > 44 ? 13 : 10} fontWeight="700" fill={color}>{score}</text>
     </svg>
   )
 }
 
-const CustomTooltip = ({ active, payload, label }) => {
+const Chip = ({ color, children }) => (
+  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold text-white"
+    style={{ background: color }}>
+    {children}
+  </span>
+)
+
+const Tooltip2 = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null
   return (
     <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3 shadow-xl text-xs">
-      <p className="font-semibold text-[var(--text)] mb-1">{label}</p>
+      <p className="font-semibold mb-1 text-[var(--text)]">{label}</p>
       {payload.map((p, i) => (
-        <p key={i} style={{color: p.color}}>{p.name}: <strong>{p.value}</strong></p>
+        <p key={i} style={{ color: p.color }}>{p.name}: <strong>{p.value}</strong></p>
       ))}
     </div>
   )
 }
 
-// ── Main Component ───────────────────────────────────────────────
+// ── Main Component ─────────────────────────────────────────────
 export default function GlobalIntelligence() {
-  const [activeEvents, setActiveEvents] = useState(['covid', 'iran_israel'])
-  const [selectedProduct, setSelectedProduct] = useState(null)
-  const [region, setRegion] = useState('Global')
-  const [searchQ, setSearchQ] = useState('')
+  const [data, setData]           = useState(null)
+  const [loading, setLoading]     = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [lastUpdated, setLastUpdated] = useState(null)
+  const [search, setSearch]       = useState('')
   const [catFilter, setCatFilter] = useState('All')
-  const [tab, setTab] = useState('radar')
-  const [analyzing, setAnalyzing] = useState(false)
-  const [pulse, setPulse] = useState(false)
-  const [sortBy, setSortBy] = useState('score')
-  const [liveNews, setLiveNews] = useState({})
-  const [weatherAlerts, setWeatherAlerts] = useState([])
-  const [liveIntensity, setLiveIntensity] = useState({})
-  const [lastFetched, setLastFetched] = useState(null)
-  const [fetchingLive, setFetchingLive] = useState(false)
-  const [selectedEventNews, setSelectedEventNews] = useState(null)
-  const [newsLoading, setNewsLoading] = useState(false)
+  const [sortBy, setSortBy]       = useState('demand_score')
+  const [selected, setSelected]   = useState(null)
+  const [tab, setTab]             = useState('products') // products | events | chart
+  const [aiThinking, setAiThinking] = useState(false)
+  const [countdown, setCountdown] = useState(900)
 
-  // Fetch real-time data from backend (which calls free APIs)
-  const fetchLiveData = async () => {
-    setFetchingLive(true)
+  const load = useCallback(async (forceRefresh = false) => {
+    forceRefresh ? setRefreshing(true) : setLoading(true)
+    setAiThinking(true)
     try {
-      const [weatherRes, eventsRes] = await Promise.allSettled([
-        fetch('/api/global/weather-events').then(r => r.json()),
-        fetch('/api/global/events/live').then(r => r.json()),
-      ])
-      if (weatherRes.status === 'fulfilled') {
-        setWeatherAlerts(weatherRes.value.alerts || [])
-      }
-      if (eventsRes.status === 'fulfilled') {
-        const intensityMap = {}
-        for (const ev of (eventsRes.value.events || [])) {
-          intensityMap[ev.id] = ev.intensity
-        }
-        setLiveIntensity(intensityMap)
-        // Auto-activate events with high live intensity
-        const highIntensity = (eventsRes.value.events || []).filter(e => e.intensity > 30).map(e => e.id)
-        if (highIntensity.length > 0) {
-          setActiveEvents(prev => [...new Set([...prev, ...highIntensity])])
-        }
-      }
-      setLastFetched(new Date().toLocaleTimeString())
-    } catch(e) {}
-    setFetchingLive(false)
-    setPulse(true)
-    setTimeout(() => setPulse(false), 600)
-  }
-
-  const fetchNewsForEvent = async (eventId) => {
-    setNewsLoading(true); setSelectedEventNews(null)
-    try {
-      const r = await fetch(`/api/global/news/${eventId}`)
-      const d = await r.json()
-      setSelectedEventNews(d)
-    } catch {}
-    setNewsLoading(false)
-  }
-
-  useEffect(() => {
-    fetchLiveData()
-    const interval = setInterval(fetchLiveData, 15 * 60 * 1000) // refresh every 15 min
-    return () => clearInterval(interval)
+      const endpoint = forceRefresh
+        ? '/api/global/refresh-intelligence'
+        : '/api/global/ai-intelligence'
+      const method = forceRefresh ? 'post' : 'get'
+      const res = await api[method](endpoint)
+      setData(res.data)
+      setLastUpdated(new Date())
+      setCountdown(900)
+      if (res.data?.products?.length) setSelected(res.data.products[0])
+    } catch (e) {
+      console.error(e)
+    }
+    setLoading(false)
+    setRefreshing(false)
+    setAiThinking(false)
   }, [])
 
-  const categories = ['All', ...new Set(PRODUCT_UNIVERSE.map(p => p.category))]
+  // Auto-refresh every 15 min
+  useEffect(() => {
+    load()
+    const refresh = setInterval(() => load(true), 15 * 60 * 1000)
+    return () => clearInterval(refresh)
+  }, [load])
 
-  const toggleEvent = (id) => {
-    setActiveEvents(ev => ev.includes(id) ? ev.filter(e => e !== id) : [...ev, id])
-    setPulse(true)
-    setTimeout(() => setPulse(false), 600)
-  }
+  // Countdown timer
+  useEffect(() => {
+    const t = setInterval(() => setCountdown(c => c > 0 ? c - 1 : 900), 1000)
+    return () => clearInterval(t)
+  }, [])
 
-  const handleAnalyze = async () => {
-    setAnalyzing(true)
-    await fetchLiveData()
-    setAnalyzing(false)
-  }
-
-  const products = PRODUCT_UNIVERSE
+  const products = (data?.products || [])
     .filter(p => catFilter === 'All' || p.category === catFilter)
-    .filter(p => !searchQ || p.name.toLowerCase().includes(searchQ.toLowerCase()))
-    .map(p => ({ ...p, score: calcDemandScore(p, activeEvents), relevant: p.events.filter(e => activeEvents.includes(e)).length }))
-    .sort((a, b) => sortBy === 'score' ? b.score - a.score : sortBy === 'relevant' ? b.relevant - a.relevant : a.name.localeCompare(b.name))
+    .filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase()) ||
+                             p.driven_by?.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => sortBy === 'demand_score' ? b.demand_score - a.demand_score
+                  : sortBy === 'margin'        ? b.margin_pct - a.margin_pct
+                  : a.name.localeCompare(b.name))
 
+  const categories = ['All', ...new Set((data?.products || []).map(p => p.category))]
+  const events     = data?.events || []
   const topProduct = products[0]
-  const criticalCount = products.filter(p => p.score >= 75).length
-  const avgScore = Math.round(products.reduce((a, p) => a + p.score, 0) / products.length)
+  const criticalCount = products.filter(p => p.demand_score >= 75).length
+  const avgScore   = products.length ? Math.round(products.reduce((a, p) => a + p.demand_score, 0) / products.length) : 0
+  const risingCount = products.filter(p => p.trend === 'rising').length
 
-  const cityData = CITY_DATA[region] || CITY_DATA['Global']
-  const radarData = products.slice(0, 6).map(p => ({ product: p.name.split(' ')[0], score: p.score, base: p.baseScore }))
-  const heatData = products.slice(0, 8).map(p => ({ name: p.emoji + ' ' + p.name.split(' ')[0], score: p.score, events: p.relevant, category: p.category }))
+  const barData = products.slice(0, 10).map(p => ({
+    name: p.emoji + ' ' + p.name.split(' ')[0],
+    score: p.demand_score,
+    margin: p.margin_pct,
+  }))
 
-  const trendData = selectedProduct
-    ? generateTrendData(selectedProduct.baseScore, getEventMultipliers(selectedProduct, activeEvents))
-    : generateTrendData(topProduct?.baseScore || 50, [1.3])
+  const fmtCountdown = () => {
+    const m = Math.floor(countdown / 60)
+    const s = countdown % 60
+    return `${m}:${String(s).padStart(2,'0')}`
+  }
+
+  // ── Loading ──────────────────────────────────────────────────
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+      <div className="relative">
+        <div className="w-16 h-16 rounded-2xl flex items-center justify-center"
+          style={{ background: 'linear-gradient(135deg,#6366f1,#0ea5e9)' }}>
+          <Globe2 size={28} className="text-white animate-pulse"/>
+        </div>
+        <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-green-400 animate-ping"/>
+      </div>
+      <div className="text-center">
+        <p className="text-sm font-semibold text-[var(--text)]">AI is scanning global markets…</p>
+        <p className="text-xs text-[var(--muted)] mt-1">Fetching live headlines · Generating product intelligence</p>
+      </div>
+      <div className="flex gap-1">
+        {[0,1,2,3,4].map(i => (
+          <motion.div key={i} className="w-1.5 h-1.5 rounded-full bg-sky-400"
+            animate={{ y: [0,-8,0] }} transition={{ repeat: Infinity, delay: i*0.15, duration: 0.8 }}/>
+        ))}
+      </div>
+    </div>
+  )
 
   return (
-    <div className="p-4 lg:p-6 space-y-5 min-h-screen" style={{background:'var(--bg)'}}>
+    <div className="p-4 lg:p-6 space-y-5 min-h-screen" style={{ background: 'var(--bg)' }}>
 
-      {/* ── PAGE HEADER ── */}
-      <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
-              style={{background:'linear-gradient(135deg, var(--sky,#0ea5e9), var(--sky2,#38bdf8))'}}>
-              <Globe2 size={16} className="text-white"/>
-            </div>
-            <div>
-              <h1 className="text-xl font-display font-bold text-[var(--text)]">Global Product Intelligence</h1>
-              <p className="text-xs text-[var(--muted)]">Real-time demand forecasting driven by world events · {PRODUCT_UNIVERSE.length} products · {REGIONS.length} regions</p>
-            </div>
+      {/* ── HEADER ── */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
+            style={{ background: 'linear-gradient(135deg,#6366f1,#0ea5e9)' }}>
+            <Globe2 size={18} className="text-white"/>
+          </div>
+          <div>
+            <h1 className="text-xl font-display font-bold text-[var(--text)] flex items-center gap-2">
+              Global Product Intelligence
+              {data?.ai_generated && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full text-white font-medium"
+                  style={{ background: 'linear-gradient(135deg,#6366f1,#0ea5e9)' }}>
+                  ✦ AI-Powered
+                </span>
+              )}
+            </h1>
+            <p className="text-xs text-[var(--muted)]">
+              Real-time · {products.length} live products · {events.length} active events ·&nbsp;
+              {data?.headlines_used || 0} headlines analysed today
+            </p>
           </div>
         </div>
+
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Live pulse */}
           <div className="flex items-center gap-1.5 bg-[var(--card)] border border-[var(--border)] rounded-lg px-3 py-1.5">
-            <div className={`w-2 h-2 rounded-full ${pulse ? 'bg-[var(--amber)]' : 'bg-[var(--green)]'} transition-colors`}
-              style={{boxShadow: pulse ? '0 0 6px var(--amber)' : '0 0 6px var(--green)'}}/>
-            <span className="text-[10px] text-[var(--muted)] font-mono">
-              {lastFetched ? `LIVE · ${lastFetched}` : fetchingLive ? 'FETCHING...' : 'LIVE FEED'}
+            <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"
+              style={{ boxShadow: '0 0 6px #4ade80' }}/>
+            <span className="text-[10px] font-mono text-[var(--muted)]">
+              {lastUpdated ? `LIVE · ${lastUpdated.toLocaleTimeString()}` : 'LIVE FEED'}
             </span>
           </div>
-          <select value={region} onChange={e => setRegion(e.target.value)}
-            className="input text-xs py-1.5 pr-6 bg-[var(--card)]" style={{appearance:'none'}}>
-            {REGIONS.map(r => <option key={r}>{r}</option>)}
-          </select>
-          <button onClick={handleAnalyze}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-white font-medium transition-all hover:opacity-90"
-            style={{background:'linear-gradient(135deg,var(--sky,#0ea5e9),var(--sky2,#38bdf8))'}}>
-            {analyzing ? <RefreshCw size={12} className="animate-spin"/> : <Brain size={12}/>}
-            {analyzing ? 'Analyzing...' : 'Re-Analyze'}
+
+          {/* Countdown */}
+          <div className="flex items-center gap-1.5 bg-[var(--card)] border border-[var(--border)] rounded-lg px-3 py-1.5">
+            <Clock size={11} className="text-[var(--muted)]"/>
+            <span className="text-[10px] font-mono text-[var(--muted)]">Next: {fmtCountdown()}</span>
+          </div>
+
+          {/* Refresh */}
+          <button onClick={() => load(true)} disabled={refreshing}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-white font-medium disabled:opacity-60"
+            style={{ background: 'linear-gradient(135deg,#6366f1,#0ea5e9)' }}>
+            {refreshing
+              ? <><RefreshCw size={12} className="animate-spin"/> Scanning…</>
+              : <><Sparkles size={12}/> Refresh AI</>}
           </button>
         </div>
       </div>
 
+      {/* ── AI THINKING BANNER ── */}
+      <AnimatePresence>
+        {aiThinking && (
+          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+            className="flex items-center gap-3 px-4 py-3 rounded-xl border"
+            style={{ background: '#6366f110', borderColor: '#6366f140' }}>
+            <Brain size={14} className="text-indigo-400 animate-pulse"/>
+            <p className="text-xs text-indigo-300">
+              AI is scanning global headlines, detecting demand signals, and auto-generating product intelligence…
+            </p>
+            <div className="flex gap-0.5 ml-auto">
+              {[0,1,2].map(i => (
+                <motion.div key={i} className="w-1 h-3 rounded bg-indigo-400"
+                  animate={{ scaleY: [1,2,1] }} transition={{ repeat: Infinity, delay: i*0.2, duration: 0.6 }}/>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* ── KPI STRIP ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { label:'Active Events',     val: activeEvents.length,   icon:Radio,    color:'#ef4444', sub:'influencing demand'  },
-          { label:'Hot Products',      val: criticalCount,          icon:Flame,    color:'#f97316', sub:'score ≥ 75'          },
-          { label:'Avg Demand Score',  val: avgScore + '%',         icon:Activity, color:'var(--sky,#0ea5e9)', sub:'across all products'  },
-          { label:'Top Opportunity',   val: topProduct?.emoji + ' ' + (topProduct?.name.split(' ')[0] || '—'), icon:Target, color:'#10b981', sub:'highest demand score' },
-        ].map(({ label, val, icon:Icon, color, sub }) => (
-          <motion.div key={label} whileHover={{y:-2}} className="card p-4 space-y-2 cursor-default">
+          { label: 'Live Events',     val: events.length,       icon: Radio,      color: '#ef4444', sub: 'from real headlines'   },
+          { label: 'Hot Products',    val: criticalCount,        icon: Flame,      color: '#f97316', sub: 'score ≥ 75'            },
+          { label: 'Avg Demand',      val: avgScore + '%',       icon: Activity,   color: '#0ea5e9', sub: 'AI-scored'             },
+          { label: 'Rising Trends',   val: risingCount,          icon: TrendingUp, color: '#10b981', sub: 'trending up now'       },
+        ].map(({ label, val, icon: Icon, color, sub }) => (
+          <motion.div key={label} whileHover={{ y: -2 }} className="card p-4 space-y-2">
             <div className="flex justify-between items-start">
               <p className="text-[10px] text-[var(--muted)] font-medium">{label}</p>
-              <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{background:`${color}20`}}>
-                <Icon size={12} style={{color}}/>
+              <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: `${color}20` }}>
+                <Icon size={12} style={{ color }}/>
               </div>
             </div>
-            <p className="text-xl font-display font-bold" style={{color}}>{val}</p>
+            <p className="text-2xl font-display font-bold" style={{ color }}>{val}</p>
             <p className="text-[9px] text-[var(--muted)]">{sub}</p>
           </motion.div>
         ))}
       </div>
 
-      {/* ── LIVE WEATHER ALERTS ── */}
-      {weatherAlerts.length > 0 && (
-        <div className="flex gap-2 flex-wrap">
-          {weatherAlerts.map((a, i) => (
-            <div key={i} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-white"
-              style={{background: a.severity === 'high' ? '#ef4444' : '#f59e0b'}}>
-              <span>{a.type === 'extreme_heat' ? '🌡️' : a.type === 'heavy_rain' ? '🌧️' : a.type === 'storm' ? '🌪️' : '❄️'}</span>
-              <span>{a.city}: {a.type.replace('_',' ')} {a.value}</span>
-            </div>
-          ))}
-          <span className="text-[10px] text-[var(--muted)] self-center">Live weather from Open-Meteo API</span>
-        </div>
-      )}
-
-      {/* ── WORLD EVENTS PANEL ── */}
-      <div className="card p-4">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <AlertTriangle size={14} className="text-[var(--amber)]"/>
-            <h2 className="text-sm font-semibold text-[var(--text)]">Active World Events</h2>
-            <span className="text-[9px] text-[var(--muted)] bg-[var(--border)] px-1.5 py-0.5 rounded-full">Toggle to update demand</span>
-          </div>
-          <span className="text-[10px] text-[var(--muted)]">{activeEvents.length} / {GLOBAL_EVENTS.length} active</span>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
-          {GLOBAL_EVENTS.map(ev => {
-            const on = activeEvents.includes(ev.id)
-            return (
-              <motion.button key={ev.id} whileTap={{scale:0.95}} onClick={() => toggleEvent(ev.id)}
-                className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 text-center transition-all cursor-pointer ${on ? 'border-transparent' : 'border-[var(--border)] opacity-50 hover:opacity-75'}`}
-                style={on ? {background:`${ev.color}20`, borderColor:`${ev.color}60`} : {}}>
-                <span className="text-2xl">{ev.icon}</span>
-                <p className="text-[9px] font-semibold leading-tight" style={{color: on ? ev.color : 'var(--muted)'}}>{ev.label}</p>
-                <div className="flex items-center gap-1">
-                  <MapPin size={8} style={{color: on ? ev.color : 'var(--dim)'}}/>
-                  <span className="text-[8px]" style={{color:'var(--dim)'}}>{ev.region}</span>
-                </div>
-                <div className={`w-4 h-2 rounded-full transition-all ${on ? 'opacity-100' : 'opacity-30'}`}
-                  style={{background: ev.color}}/>
-              </motion.button>
-            )
-          })}
-        </div>
+      {/* ── TABS ── */}
+      <div className="flex gap-1 bg-[var(--card)] border border-[var(--border)] rounded-xl p-1 w-fit">
+        {[
+          { id: 'products', label: 'Live Products',  icon: Package   },
+          { id: 'events',   label: 'World Events',   icon: Newspaper },
+          { id: 'chart',    label: 'Demand Chart',   icon: BarChart2 },
+        ].map(({ id, label, icon: Icon }) => (
+          <button key={id} onClick={() => setTab(id)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${tab === id ? 'text-white' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}
+            style={tab === id ? { background: 'linear-gradient(135deg,#6366f1,#0ea5e9)' } : {}}>
+            <Icon size={11}/>{label}
+          </button>
+        ))}
       </div>
 
-      {/* ── MAIN GRID ── */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+      {/* ══ TAB: PRODUCTS ══ */}
+      {tab === 'products' && (
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
 
-        {/* Products List */}
-        <div className="xl:col-span-1 space-y-3">
-          <div className="card p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-semibold text-[var(--text)]">Product Demand Ranking</h2>
-              <select value={sortBy} onChange={e=>setSortBy(e.target.value)} className="input text-[10px] py-1 px-2">
-                <option value="score">By Score</option>
-                <option value="relevant">By Events</option>
+          {/* Product List */}
+          <div className="xl:col-span-1 card p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-[var(--text)] flex items-center gap-2">
+                <Sparkles size={13} className="text-indigo-400"/>
+                AI-Generated Products
+              </h2>
+              <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+                className="input text-[10px] py-1 px-2">
+                <option value="demand_score">By Demand</option>
+                <option value="margin">By Margin</option>
                 <option value="name">By Name</option>
               </select>
             </div>
 
-            {/* Search + filter */}
-            <div className="flex gap-2 mb-3">
-              <div className="relative flex-1">
-                <Search size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--muted)]"/>
-                <input value={searchQ} onChange={e=>setSearchQ(e.target.value)}
-                  className="input text-xs pl-7 py-1.5 w-full" placeholder="Search products…"/>
-              </div>
+            {/* Search */}
+            <div className="relative">
+              <Search size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--muted)]"/>
+              <input value={search} onChange={e => setSearch(e.target.value)}
+                className="input text-xs pl-7 py-1.5 w-full" placeholder="Search products or events…"/>
             </div>
 
-            <div className="flex gap-1 flex-wrap mb-3">
+            {/* Category pills */}
+            <div className="flex gap-1 flex-wrap">
               {categories.map(c => (
                 <button key={c} onClick={() => setCatFilter(c)}
-                  className={`text-[9px] px-2 py-0.5 rounded-full font-medium transition-all ${catFilter===c?'text-white':'bg-[var(--border)] text-[var(--muted)] hover:text-[var(--text)]'}`}
-                  style={catFilter===c?{background:'linear-gradient(135deg,var(--sky,#0ea5e9),var(--sky2,#38bdf8))'}:{}}>{c}</button>
+                  className={`text-[9px] px-2 py-0.5 rounded-full font-medium transition-all ${catFilter === c ? 'text-white' : 'bg-[var(--border)] text-[var(--muted)]'}`}
+                  style={catFilter === c ? { background: 'linear-gradient(135deg,#6366f1,#0ea5e9)' } : {}}>
+                  {c}
+                </button>
               ))}
             </div>
 
-            <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1">
-              {products.map((p, i) => (
-                <motion.div key={p.id} initial={{opacity:0,x:-10}} animate={{opacity:1,x:0}} transition={{delay:i*0.03}}
-                  onClick={() => setSelectedProduct(p === selectedProduct ? null : p)}
-                  className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all hover:border-sky-400/40 ${selectedProduct?.id===p.id?'border-sky-400/60 bg-sky-400/5':'border-[var(--border)] hover:bg-[var(--card2)]'}`}>
-                  <ScoreRing score={p.score} size={44}/>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1 mb-0.5">
-                      <span className="text-base">{p.emoji}</span>
-                      <p className="text-xs font-semibold text-[var(--text)] truncate">{p.name}</p>
-                    </div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-[9px] text-[var(--muted)]">{p.category}</span>
-                      {p.price && <span className="text-[9px] font-mono text-sky-400">{p.price}</span>}
-                      {p.margin && <span className="text-[9px] text-[var(--green)]">↑{p.margin}</span>}
-                    </div>
-                    {p.relevant > 0 && (
-                      <div className="flex gap-1 flex-wrap">
-                        {p.events.filter(e => activeEvents.includes(e)).map(eid => {
-                          const ev = GLOBAL_EVENTS.find(x=>x.id===eid)
-                          return ev ? <span key={eid} className="text-[8px] px-1 py-0.5 rounded font-medium text-white" style={{background:ev.color+'cc'}}>{ev.icon} {ev.label.split(' ')[0]}</span> : null
-                        })}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
-                    {p.score >= 75 ? <Flame size={12} className="text-[#f97316]"/> : p.score >= 55 ? <TrendingUp size={12} className="text-[var(--green)]"/> : <Minus size={12} className="text-[var(--muted)]"/>}
-                    {p.stockLevel && p.stockLevel !== 'N/A' && (
-                      <span className="text-[8px] px-1 rounded font-medium" style={{background:p.stockLevel==='low'?'#ef444420':p.stockLevel==='high'?'#10b98120':'#f59e0b20',color:p.stockLevel==='low'?'#ef4444':p.stockLevel==='high'?'#10b981':'#f59e0b'}}>{p.stockLevel}</span>
-                    )}
-                    <ChevronRight size={10} className="text-[var(--dim)]"/>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Right Panel: Charts + Insights */}
-        <div className="xl:col-span-2 space-y-4">
-
-          {/* Selected Product Deep-Dive */}
-          <AnimatePresence>
-            {selectedProduct && (
-              <motion.div key={selectedProduct.id} initial={{opacity:0,y:-10}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-10}}
-                className="card p-5 border-2" style={{borderColor:'var(--sky,#0ea5e9)50'}}>
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <span className="text-4xl">{selectedProduct.emoji}</span>
-                    <div>
-                      <h3 className="text-base font-display font-bold text-[var(--text)]">{selectedProduct.name}</h3>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <Badge color="var(--sky,#0ea5e9)">{selectedProduct.category}</Badge>
-                        <Badge color={selectedProduct.score>=75?'#ef4444':selectedProduct.score>=55?'#f59e0b':'#6b7280'}>
-                          Score: {selectedProduct.score}
-                        </Badge>
-                        {selectedProduct.relevant > 0 && <Badge color="#10b981">{selectedProduct.relevant} event{selectedProduct.relevant>1?'s':''} active</Badge>}
-                      </div>
-                    </div>
-                  </div>
-                  <button onClick={()=>setSelectedProduct(null)} className="text-[var(--muted)] hover:text-[var(--text)] transition-colors text-lg">✕</button>
-                </div>
-
-                {/* AI Insight Box */}
-                <div className="rounded-xl p-4 mb-4 border border-purple-500/30" style={{background:'linear-gradient(135deg,var(--sky,#0ea5e9)08,var(--sky2,#38bdf8)08)'}}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <Lightbulb size={13} className="text-sky-400"/>
-                    <span className="text-[10px] font-semibold text-sky-400 uppercase tracking-wider">Deep Intelligence</span>
-                  </div>
-                  <p className="text-sm text-[var(--text2)] leading-relaxed">{selectedProduct.insight}</p>
-                </div>
-
-                {/* 12-Month Demand Chart */}
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="text-xs font-semibold text-[var(--text)]">12-Month Demand Forecast</p>
-                    <div className="flex gap-3 text-[9px] text-[var(--muted)]">
-                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--sky,#0ea5e9)] inline-block"/>Actual</span>
-                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#10b981] inline-block"/>Forecast</span>
-                    </div>
-                  </div>
-                  <ResponsiveContainer width="100%" height={180}>
-                    <AreaChart data={trendData} margin={{top:5,right:10,left:-20,bottom:0}}>
-                      <defs>
-                        <linearGradient id="demGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="var(--sky,#0ea5e9)" stopOpacity={0.3}/>
-                          <stop offset="95%" stopColor="var(--sky,#0ea5e9)" stopOpacity={0}/>
-                        </linearGradient>
-                        <linearGradient id="frcGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                          <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.5}/>
-                      <XAxis dataKey="month" tick={{fontSize:9,fill:'var(--muted)'}} axisLine={false} tickLine={false}/>
-                      <YAxis tick={{fontSize:9,fill:'var(--muted)'}} axisLine={false} tickLine={false} domain={[0,100]}/>
-                      <Tooltip content={<CustomTooltip/>}/>
-                      <Area type="monotone" dataKey="demand" name="Demand" stroke="var(--sky,#0ea5e9)" fill="url(#demGrad)" strokeWidth={2}/>
-                      <Area type="monotone" dataKey="forecast" name="Forecast" stroke="#10b981" fill="url(#frcGrad)" strokeWidth={2} strokeDasharray="4 2"/>
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Charts Row */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-            {/* Radar Chart */}
-            <div className="card p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="flex gap-2 text-[9px]">
-                  {['radar','bar','scatter'].map(t=>(
-                    <button key={t} onClick={()=>setTab(t)}
-                      className={`px-2 py-0.5 rounded-full font-medium transition-all ${tab===t?'text-white':'bg-[var(--border)] text-[var(--muted)]'}`}
-                      style={tab===t?{background:'linear-gradient(135deg,var(--sky,#0ea5e9),var(--sky2,#38bdf8))'}:{}}>{t.charAt(0).toUpperCase()+t.slice(1)}</button>
-                  ))}
-                </div>
-              </div>
-
-              {tab === 'radar' && (
-                <ResponsiveContainer width="100%" height={200}>
-                  <RadarChart data={radarData}>
-                    <PolarGrid stroke="var(--border)"/>
-                    <PolarAngleAxis dataKey="product" tick={{fontSize:9,fill:'var(--muted)'}}/>
-                    <Radar name="Live Score" dataKey="score" stroke="var(--sky,#0ea5e9)" fill="var(--sky,#0ea5e9)" fillOpacity={0.25} strokeWidth={2}/>
-                    <Radar name="Base" dataKey="base" stroke="#10b981" fill="#10b981" fillOpacity={0.1} strokeWidth={1} strokeDasharray="3 2"/>
-                    <Tooltip content={<CustomTooltip/>}/>
-                    <Legend wrapperStyle={{fontSize:9}}/>
-                  </RadarChart>
-                </ResponsiveContainer>
-              )}
-
-              {tab === 'bar' && (
-                <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={heatData} margin={{top:5,right:10,left:-20,bottom:20}}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.5}/>
-                    <XAxis dataKey="name" tick={{fontSize:8,fill:'var(--muted)'}} angle={-30} textAnchor="end" interval={0}/>
-                    <YAxis tick={{fontSize:9,fill:'var(--muted)'}} axisLine={false} tickLine={false}/>
-                    <Tooltip content={<CustomTooltip/>}/>
-                    <Bar dataKey="score" name="Demand Score" radius={[4,4,0,0]}>
-                      {heatData.map((e,i)=><Cell key={i} fill={e.score>=75?'#ef4444':e.score>=60?'#f59e0b':'var(--sky,#0ea5e9)'}/>)}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-
-              {tab === 'scatter' && (
-                <ResponsiveContainer width="100%" height={200}>
-                  <ScatterChart margin={{top:5,right:10,left:-20,bottom:5}}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.5}/>
-                    <XAxis type="number" dataKey="events" name="Active Events" tick={{fontSize:9,fill:'var(--muted)'}} label={{value:'Events',position:'insideBottom',offset:-5,fontSize:9,fill:'var(--muted)'}}/>
-                    <YAxis type="number" dataKey="score" name="Demand Score" tick={{fontSize:9,fill:'var(--muted)'}}/>
-                    <ZAxis range={[40,160]}/>
-                    <Tooltip content={<CustomTooltip/>} cursor={{strokeDasharray:'3 3'}}/>
-                    <Scatter data={heatData} name="Products">
-                      {heatData.map((e,i)=><Cell key={i} fill={['var(--sky,#0ea5e9)','#10b981','#f59e0b','#ef4444','#ec4899','var(--sky2,#38bdf8)','#60a5fa','#34d399'][i%8]}/>)}
-                    </Scatter>
-                  </ScatterChart>
-                </ResponsiveContainer>
-              )}
-            </div>
-
-            {/* City Demand Map */}
-            <div className="card p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <MapPin size={13} className="text-sky-400"/>
-                <p className="text-xs font-semibold text-[var(--text)]">City Demand Heatmap</p>
-                <span className="text-[9px] text-[var(--muted)]">— {region}</span>
-              </div>
-              <div className="space-y-2.5">
-                {cityData.map((c, i) => {
-                  const eventBoost = activeEvents.length * 4
-                  const score = Math.min(99, c.score + eventBoost + Math.floor(Math.random()*5))
-                  const color = score >= 75 ? '#ef4444' : score >= 60 ? '#f59e0b' : '#10b981'
-                  return (
-                    <div key={c.city} className="flex items-center gap-3">
-                      <span className="text-[10px] text-[var(--muted)] w-24 flex-shrink-0">{c.city}</span>
-                      <div className="flex-1 h-2 bg-[var(--border)] rounded-full overflow-hidden">
-                        <motion.div className="h-full rounded-full" style={{background:color}}
-                          initial={{width:0}} animate={{width:`${score}%`}} transition={{delay:i*0.05,duration:0.6}}/>
-                      </div>
-                      <span className="text-[10px] font-mono font-bold w-6 text-right" style={{color}}>{score}</span>
-                    </div>
-                  )
-                })}
-              </div>
-              <p className="text-[9px] text-[var(--dim)] mt-3 flex items-center gap-1">
-                <Info size={9}/> Score = base demand + active event boost for region
-              </p>
-            </div>
-          </div>
-
-          {/* Strategic Insight Cards */}
-          <div className="card p-4">
-            <div className="flex items-center gap-2 mb-4">
-              <Brain size={14} className="text-sky-400"/>
-              <h2 className="text-sm font-semibold text-[var(--text)]">Strategic Intelligence Feed</h2>
-              <div className="flex items-center gap-1 ml-auto">
-                <div className="w-1.5 h-1.5 rounded-full bg-[var(--green)] animate-pulse"/>
-                <span className="text-[9px] text-[var(--muted)]">auto-updating</span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              {products.filter(p => p.relevant > 0).slice(0, 4).map((p, i) => {
-                const urgency = p.score >= 80 ? 'URGENT' : p.score >= 65 ? 'HIGH' : 'MEDIUM'
-                const urgColor = urgency==='URGENT'?'#ef4444':urgency==='HIGH'?'#f59e0b':'var(--sky,#0ea5e9)'
+            {/* Product cards */}
+            <div className="space-y-2 max-h-[520px] overflow-y-auto pr-1">
+              {products.map((p, i) => {
+                const TIcon = TREND_ICON[p.trend] || Minus
+                const isSelected = selected?.id === p.id
                 return (
-                  <motion.div key={p.id} initial={{opacity:0}} animate={{opacity:1}} transition={{delay:i*0.1}}
-                    className="rounded-xl p-4 border cursor-pointer hover:border-purple-500/40 transition-all"
-                    style={{borderColor:`${urgColor}30`,background:`${urgColor}08`}}
-                    onClick={() => setSelectedProduct(p)}>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xl">{p.emoji}</span>
-                        <div>
-                          <p className="text-xs font-semibold text-[var(--text)]">{p.name}</p>
-                          <div className="flex items-center gap-1 mt-0.5">
-                            <span className="text-[8px] font-bold px-1.5 py-0.5 rounded text-white" style={{background:urgColor}}>{urgency}</span>
-                            <span className="text-[9px] text-[var(--muted)]">Score: {p.score}</span>
-                          </div>
-                        </div>
+                  <motion.div key={p.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.02 }}
+                    onClick={() => setSelected(isSelected ? null : p)}
+                    className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all
+                      ${isSelected ? 'border-indigo-400/60 bg-indigo-400/5' : 'border-[var(--border)] hover:border-indigo-400/30 hover:bg-[var(--card2)]'}`}>
+                    <ScoreRing score={p.demand_score} size={44}/>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <span className="text-sm">{p.emoji}</span>
+                        <p className="text-xs font-semibold text-[var(--text)] truncate">{p.name}</p>
                       </div>
-                      <ScoreRing score={p.score} size={38}/>
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span className="text-[9px] text-[var(--muted)]">{p.category}</span>
+                        {p.price_range && <span className="text-[9px] font-mono text-indigo-400">{p.price_range}</span>}
+                        {p.margin_pct > 0 && <span className="text-[9px] text-green-400">↑{p.margin_pct}%</span>}
+                      </div>
+                      {p.driven_by && (
+                        <p className="text-[9px] text-[var(--muted)] truncate">📡 {p.driven_by}</p>
+                      )}
                     </div>
-                    <p className="text-[10px] text-[var(--muted)] leading-relaxed line-clamp-2">{p.insight}</p>
-                    <div className="flex items-center gap-1 mt-2 flex-wrap">
-                      {p.events.filter(e=>activeEvents.includes(e)).map(eid=>{
-                        const ev=GLOBAL_EVENTS.find(x=>x.id===eid)
-                        return ev?<span key={eid} className="text-[8px] px-1 py-0.5 rounded font-medium text-white" style={{background:ev.color+'bb'}}>{ev.icon}</span>:null
-                      })}
-                      <span className="text-[9px] text-sky-400 ml-auto flex items-center gap-0.5">View details <ChevronRight size={9}/></span>
+                    <div className="flex flex-col items-end gap-1.5">
+                      <TIcon size={12} style={{ color: TREND_COLOR[p.trend] }}/>
+                      <Chip color={URGENCY_COLOR[p.stock_urgency] || '#6b7280'}>
+                        {p.stock_urgency}
+                      </Chip>
                     </div>
                   </motion.div>
                 )
               })}
-              {products.filter(p=>p.relevant>0).length === 0 && (
-                <div className="col-span-2 text-center py-8 text-[var(--muted)]">
-                  <Globe2 size={28} className="mx-auto mb-2 opacity-40"/>
-                  <p className="text-sm">Activate world events above to see strategic insights</p>
+              {products.length === 0 && (
+                <div className="text-center py-10 text-[var(--muted)]">
+                  <Package size={24} className="mx-auto mb-2 opacity-40"/>
+                  <p className="text-xs">No products match your filter</p>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Bottom: Event Impact Matrix */}
-          <div className="card p-4">
-            <div className="flex items-center gap-2 mb-4">
-              <Cpu size={14} className="text-sky-400"/>
-              <h2 className="text-sm font-semibold text-[var(--text)]">Event × Product Impact Matrix</h2>
-              <span className="text-[9px] text-[var(--muted)] ml-1">— which events affect which products</span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-[9px]">
-                <thead>
-                  <tr>
-                    <th className="text-left text-[var(--muted)] font-medium pb-2 pr-3 min-w-[100px]">Product</th>
-                    {GLOBAL_EVENTS.map(ev => (
-                      <th key={ev.id} className="text-center pb-2 px-1 min-w-[36px]">
-                        <div className="flex flex-col items-center gap-0.5">
-                          <span className="text-base">{ev.icon}</span>
-                          <span className={`font-medium ${activeEvents.includes(ev.id)?'text-[var(--text)]':'text-[var(--dim)]'}`}>{ev.label.split(' ')[0]}</span>
+          {/* Right: Selected product detail */}
+          <div className="xl:col-span-2 space-y-4">
+            <AnimatePresence mode="wait">
+              {selected ? (
+                <motion.div key={selected.id}
+                  initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                  className="card p-5 border-2" style={{ borderColor: '#6366f130' }}>
+
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <span className="text-4xl">{selected.emoji}</span>
+                      <div>
+                        <h3 className="text-base font-display font-bold text-[var(--text)]">{selected.name}</h3>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          <Chip color="#6366f1">{selected.category}</Chip>
+                          <Chip color={URGENCY_COLOR[selected.stock_urgency]}>{selected.stock_urgency} urgency</Chip>
+                          <Chip color={TREND_COLOR[selected.trend]}>{selected.trend}</Chip>
                         </div>
-                      </th>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <ScoreRing score={selected.demand_score} size={56}/>
+                      <p className="text-[9px] text-[var(--muted)] mt-1">demand score</p>
+                    </div>
+                  </div>
+
+                  {/* AI Insight */}
+                  <div className="rounded-xl p-4 mb-4 border border-indigo-500/20"
+                    style={{ background: 'linear-gradient(135deg,#6366f108,#0ea5e908)' }}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Brain size={13} className="text-indigo-400"/>
+                      <span className="text-[10px] font-semibold text-indigo-400 uppercase tracking-wider">AI Market Insight</span>
+                    </div>
+                    <p className="text-sm text-[var(--text2)] leading-relaxed">{selected.insight}</p>
+                  </div>
+
+                  {/* Stats grid */}
+                  <div className="grid grid-cols-3 gap-3 mb-4">
+                    {[
+                      { label: 'Price Range',    val: selected.price_range || 'N/A', color: '#0ea5e9' },
+                      { label: 'Est. Margin',    val: selected.margin_pct + '%',     color: '#10b981' },
+                      { label: 'Demand Score',   val: selected.demand_score + '/100', color: URGENCY_COLOR[selected.stock_urgency] },
+                    ].map(({ label, val, color }) => (
+                      <div key={label} className="rounded-xl p-3 text-center" style={{ background: `${color}10` }}>
+                        <p className="text-[9px] text-[var(--muted)] mb-1">{label}</p>
+                        <p className="text-sm font-bold" style={{ color }}>{val}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Driven by */}
+                  {selected.driven_by && (
+                    <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-lg bg-[var(--card2)] border border-[var(--border)]">
+                      <Radio size={11} className="text-[var(--muted)] flex-shrink-0"/>
+                      <p className="text-[10px] text-[var(--muted)]">
+                        <span className="text-[var(--text)] font-medium">Signal: </span>{selected.driven_by}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Target regions */}
+                  {selected.target_regions?.length > 0 && (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[9px] text-[var(--muted)]">Target regions:</span>
+                      {selected.target_regions.map(r => (
+                        <Chip key={r} color="#6b7280">{r}</Chip>
+                      ))}
+                    </div>
+                  )}
+                </motion.div>
+              ) : (
+                <motion.div key="empty" className="card p-10 text-center"
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                  <Eye size={28} className="mx-auto mb-3 opacity-30"/>
+                  <p className="text-sm text-[var(--muted)]">Select a product to see AI deep-dive</p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Top 4 urgent cards */}
+            <div>
+              <h3 className="text-xs font-semibold text-[var(--text)] mb-3 flex items-center gap-2">
+                <Flame size={12} className="text-orange-400"/>
+                Most Urgent Right Now
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {products.filter(p => p.stock_urgency === 'critical' || p.stock_urgency === 'high').slice(0, 4).map((p, i) => {
+                  const color = URGENCY_COLOR[p.stock_urgency]
+                  return (
+                    <motion.div key={p.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                      transition={{ delay: i * 0.08 }}
+                      onClick={() => setSelected(p)}
+                      className="rounded-xl p-4 border cursor-pointer hover:scale-[1.01] transition-all"
+                      style={{ borderColor: `${color}30`, background: `${color}08` }}>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xl">{p.emoji}</span>
+                          <div>
+                            <p className="text-xs font-semibold text-[var(--text)] leading-tight">{p.name}</p>
+                            <Chip color={color}>{p.stock_urgency}</Chip>
+                          </div>
+                        </div>
+                        <ScoreRing score={p.demand_score} size={38}/>
+                      </div>
+                      <p className="text-[10px] text-[var(--muted)] line-clamp-2">{p.insight}</p>
+                      <div className="flex items-center gap-1 mt-2">
+                        <span className="text-[9px] text-indigo-400 ml-auto flex items-center gap-0.5">
+                          View details <ChevronRight size={9}/>
+                        </span>
+                      </div>
+                    </motion.div>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══ TAB: EVENTS ══ */}
+      {tab === 'events' && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <AlertTriangle size={14} className="text-amber-400"/>
+            <h2 className="text-sm font-semibold text-[var(--text)]">Live World Events</h2>
+            <span className="text-[9px] bg-[var(--border)] px-2 py-0.5 rounded-full text-[var(--muted)]">
+              Auto-detected from real headlines · AI classified
+            </span>
+          </div>
+
+          {events.length === 0 ? (
+            <div className="card p-10 text-center text-[var(--muted)]">
+              <Globe2 size={28} className="mx-auto mb-3 opacity-30"/>
+              <p className="text-sm">No live events detected — try refreshing</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {events.map((ev, i) => {
+                const color = EVENT_COLORS[ev.type] || '#6b7280'
+                // Products driven by this event type
+                const relatedProducts = (data?.products || [])
+                  .filter(p => p.driven_by?.toLowerCase().includes(ev.type) ||
+                               p.insight?.toLowerCase().includes(ev.type))
+                  .slice(0, 3)
+                return (
+                  <motion.div key={ev.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.06 }}
+                    className="card p-4 border-l-4"
+                    style={{ borderLeftColor: color }}>
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-2xl">{ev.icon}</span>
+                        <div>
+                          <div className="flex items-center gap-1 mb-0.5">
+                            <Chip color={color}>{ev.type}</Chip>
+                            <Chip color={ev.severity === 'high' ? '#ef4444' : ev.severity === 'medium' ? '#f59e0b' : '#10b981'}>
+                              {ev.severity}
+                            </Chip>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-xs font-medium text-[var(--text)] leading-relaxed mb-3">{ev.headline}</p>
+
+                    {relatedProducts.length > 0 && (
+                      <div>
+                        <p className="text-[9px] text-[var(--muted)] mb-1.5 font-medium uppercase tracking-wider">Products impacted:</p>
+                        <div className="flex flex-col gap-1">
+                          {relatedProducts.map(p => (
+                            <div key={p.id}
+                              onClick={() => { setSelected(p); setTab('products') }}
+                              className="flex items-center gap-2 px-2 py-1 rounded-lg bg-[var(--card2)] cursor-pointer hover:bg-[var(--border)] transition-all">
+                              <span className="text-sm">{p.emoji}</span>
+                              <span className="text-[10px] text-[var(--text)] flex-1 truncate">{p.name}</span>
+                              <span className="text-[9px] font-bold" style={{ color: p.demand_score >= 75 ? '#ef4444' : '#f59e0b' }}>
+                                {p.demand_score}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </motion.div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ══ TAB: CHART ══ */}
+      {tab === 'chart' && (
+        <div className="space-y-4">
+          <div className="card p-5">
+            <h2 className="text-sm font-semibold text-[var(--text)] mb-1 flex items-center gap-2">
+              <BarChart2 size={13} className="text-indigo-400"/>
+              Top 10 Products by Demand Score
+            </h2>
+            <p className="text-[10px] text-[var(--muted)] mb-4">AI-scored based on live global headlines</p>
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={barData} margin={{ top: 5, right: 10, left: -20, bottom: 40 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.4}/>
+                <XAxis dataKey="name" tick={{ fontSize: 9, fill: 'var(--muted)' }}
+                  angle={-35} textAnchor="end" interval={0}/>
+                <YAxis tick={{ fontSize: 9, fill: 'var(--muted)' }} axisLine={false} tickLine={false} domain={[0,100]}/>
+                <Tooltip content={<Tooltip2/>}/>
+                <Bar dataKey="score" name="Demand Score" radius={[6,6,0,0]}>
+                  {barData.map((e, i) => (
+                    <Cell key={i} fill={e.score >= 75 ? '#ef4444' : e.score >= 60 ? '#f59e0b' : '#6366f1'}/>
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="card p-5">
+            <h2 className="text-sm font-semibold text-[var(--text)] mb-1 flex items-center gap-2">
+              <TrendingUp size={13} className="text-green-400"/>
+              Estimated Margin % by Product
+            </h2>
+            <p className="text-[10px] text-[var(--muted)] mb-4">Higher margin = better profit opportunity</p>
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={barData} margin={{ top: 5, right: 10, left: -20, bottom: 40 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.4}/>
+                <XAxis dataKey="name" tick={{ fontSize: 9, fill: 'var(--muted)' }}
+                  angle={-35} textAnchor="end" interval={0}/>
+                <YAxis tick={{ fontSize: 9, fill: 'var(--muted)' }} axisLine={false} tickLine={false}/>
+                <Tooltip content={<Tooltip2/>}/>
+                <Bar dataKey="margin" name="Margin %" radius={[6,6,0,0]}>
+                  {barData.map((e, i) => (
+                    <Cell key={i} fill={e.margin >= 60 ? '#10b981' : e.margin >= 35 ? '#0ea5e9' : '#6b7280'}/>
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* All products table */}
+          <div className="card p-5">
+            <h2 className="text-sm font-semibold text-[var(--text)] mb-4 flex items-center gap-2">
+              <Filter size={13} className="text-indigo-400"/>
+              Full AI-Generated Product List
+            </h2>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-[var(--border)]">
+                    {['#','Product','Category','Demand','Margin','Price','Trend','Urgency','Signal'].map(h => (
+                      <th key={h} className="text-left text-[9px] text-[var(--muted)] font-medium pb-2 pr-4 whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {products.slice(0,8).map(p => (
-                    <tr key={p.id} className="border-t border-[var(--border)]">
-                      <td className="py-2 pr-3 font-medium text-[var(--text)]">{p.emoji} {p.name.split(' ')[0]}</td>
-                      {GLOBAL_EVENTS.map(ev => {
-                        const affects = p.events.includes(ev.id)
-                        const isOn    = activeEvents.includes(ev.id)
-                        return (
-                          <td key={ev.id} className="text-center py-2 px-1">
-                            {affects ? (
-                              <div className="flex justify-center">
-                                <div className="w-4 h-4 rounded flex items-center justify-center"
-                                  style={{background: isOn ? ev.color+'40' : 'var(--border)'}}>
-                                  <div className="w-2 h-2 rounded-sm" style={{background: isOn ? ev.color : 'var(--dim)'}}/>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="flex justify-center">
-                                <div className="w-1.5 h-1.5 rounded-full bg-[var(--border)]"/>
-                              </div>
-                            )}
-                          </td>
-                        )
-                      })}
-                    </tr>
-                  ))}
+                  {products.map((p, i) => {
+                    const TIcon = TREND_ICON[p.trend] || Minus
+                    return (
+                      <tr key={p.id} onClick={() => { setSelected(p); setTab('products') }}
+                        className="border-b border-[var(--border)] hover:bg-[var(--card2)] cursor-pointer transition-colors">
+                        <td className="py-2 pr-4 text-[var(--muted)]">{i+1}</td>
+                        <td className="py-2 pr-4 font-medium text-[var(--text)] whitespace-nowrap max-w-[160px] truncate">
+                          {p.emoji} {p.name}
+                        </td>
+                        <td className="py-2 pr-4 text-[var(--muted)]">{p.category}</td>
+                        <td className="py-2 pr-4 font-bold" style={{ color: p.demand_score >= 75 ? '#ef4444' : '#f59e0b' }}>
+                          {p.demand_score}
+                        </td>
+                        <td className="py-2 pr-4 text-green-400">{p.margin_pct}%</td>
+                        <td className="py-2 pr-4 text-[var(--muted)] whitespace-nowrap">{p.price_range}</td>
+                        <td className="py-2 pr-4">
+                          <TIcon size={12} style={{ color: TREND_COLOR[p.trend] }}/>
+                        </td>
+                        <td className="py-2 pr-4">
+                          <Chip color={URGENCY_COLOR[p.stock_urgency] || '#6b7280'}>{p.stock_urgency}</Chip>
+                        </td>
+                        <td className="py-2 text-[9px] text-[var(--muted)] max-w-[140px] truncate">{p.driven_by}</td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
-            <p className="text-[9px] text-[var(--dim)] mt-2 flex items-center gap-1">
-              <Info size={9}/> Colored squares = event actively driving that product's demand
-            </p>
           </div>
-
         </div>
+      )}
+
+      {/* ── FOOTER ── */}
+      <div className="flex items-center justify-between pt-2 border-t border-[var(--border)]">
+        <p className="text-[9px] text-[var(--dim)] flex items-center gap-1">
+          <Radio size={9}/>
+          Data sources: GDELT · Open-Meteo · Anthropic Claude · Auto-refreshes every 15 min
+        </p>
+        <p className="text-[9px] text-[var(--dim)]">
+          {data?.ai_generated ? '✦ AI-generated product list' : '⚡ Rule-based fallback (add ANTHROPIC_API_KEY for full AI)'}
+        </p>
       </div>
     </div>
   )

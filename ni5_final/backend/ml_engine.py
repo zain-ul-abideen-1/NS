@@ -408,34 +408,63 @@ TICKET_TRAIN = [
 # ML MODEL TRAINING
 # ──────────────────────────────────────────────────────────
 
+def _load_csv_data(filename, text_col, label_col):
+    """Load training data from CSV if available, else return empty list."""
+    try:
+        import os, csv
+        path = os.path.join(os.path.dirname(__file__), filename)
+        if not os.path.exists(path):
+            return []
+        rows = []
+        with open(path, encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                t = row.get(text_col, '').strip()
+                l = row.get(label_col, '').strip()
+                if t and l:
+                    rows.append((t, l))
+        print(f"[ML] Loaded {len(rows)} rows from {filename}")
+        return rows
+    except Exception as e:
+        print(f"[ML] CSV load warning: {e}")
+        return []
+
 def _build_sentiment_model():
-    texts  = [t for t, _ in SENTIMENT_TRAIN]
-    labels = [l for _, l in SENTIMENT_TRAIN]
+    # Load CSV dataset first, fall back to built-in samples
+    csv_data = _load_csv_data('review_training_data.csv', 'text', 'sentiment')
+    combined = list(SENTIMENT_TRAIN) + csv_data
+    texts  = [t for t, _ in combined]
+    labels = [l for _, l in combined]
+    print(f"[ML] Sentiment training on {len(texts)} samples")
     pipe = Pipeline([
         ('tfidf', TfidfVectorizer(
             ngram_range=(1, 3),
-            max_features=8000,
+            max_features=12000,
             sublinear_tf=True,
             min_df=1,
             strip_accents='unicode',
         )),
-        ('clf', SVC(C=1.2, kernel='linear', probability=True, max_iter=3000)),
+        ('clf', SVC(C=1.5, kernel='linear', probability=True, max_iter=5000)),
     ])
     pipe.fit(texts, labels)
     return pipe
 
 def _build_ticket_model():
-    texts  = [t for t, _ in TICKET_TRAIN]
-    labels = [l for _, l in TICKET_TRAIN]
+    # Load CSV dataset first, fall back to built-in samples
+    csv_data = _load_csv_data('ticket_training_data.csv', 'text', 'category')
+    combined = list(TICKET_TRAIN) + csv_data
+    texts  = [t for t, _ in combined]
+    labels = [l for _, l in combined]
+    print(f"[ML] Ticket training on {len(texts)} samples")
     pipe = Pipeline([
         ('tfidf', TfidfVectorizer(
-            ngram_range=(1, 2),
-            max_features=6000,
+            ngram_range=(1, 3),
+            max_features=10000,
             sublinear_tf=True,
             min_df=1,
             strip_accents='unicode',
         )),
-        ('clf', SVC(C=1.0, kernel='linear', probability=True, max_iter=3000)),
+        ('clf', SVC(C=1.2, kernel='linear', probability=True, max_iter=5000)),
     ])
     pipe.fit(texts, labels)
     return pipe
