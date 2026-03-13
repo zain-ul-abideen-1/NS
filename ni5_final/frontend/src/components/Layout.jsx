@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, Search, Type, Clock, GitCompare, TrendingUp,
   Ticket, Shield, User, LogOut, Sun, Moon, ChevronLeft, ChevronRight,
-  Menu, Eye, Database, Sparkles, BarChart2, Wrench, Globe2
+  Menu, Eye, Database, Sparkles, BarChart2, Wrench, Globe2, GitBranch
 } from 'lucide-react'
 import { useApp } from '../contexts/AppContext'
 import { LANGS } from '../i18n'
@@ -39,7 +39,8 @@ export default function Layout() {
     { to:'/global',  icon:Globe2,    label:'Global Intelligence'  },
   ]
   const NAV_ADMIN = user?.role === 'admin' ? [
-    { to:'/database',  icon:Database, label:'Database'  },
+    { to:'/database',  icon:Database,   label:'Database'  },
+    { to:'/workflow',  icon:GitBranch,  label:'Workflow'  },
   ] : []
 
   function NavItem({ to, icon:Icon, label }) {

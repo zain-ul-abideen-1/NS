@@ -406,8 +406,13 @@ def list_sessions(
     q = "SELECT * FROM sessions WHERE 1=1"
     params = []
     if user:
-        q += " AND (user_id=? OR user_id IS NULL)"
-        params.append(user["id"])
+        if user.get("role") == "admin":
+            pass  # admin sees all sessions
+        else:
+            q += " AND user_id=?"
+            params.append(user["id"])
+    else:
+        q += " AND 1=0"  # unauthenticated sees nothing
     if search:
         q += " AND (name LIKE ? OR source_url LIKE ?)"
         params += [f"%{search}%", f"%{search}%"]
@@ -559,19 +564,38 @@ def trends_keywords():
 @app.get("/api/dashboard/stats")
 def dashboard_stats(user=Depends(opt_user)):
     conn = get_conn()
-    uid = f"AND (user_id={user['id']} OR user_id IS NULL)" if user else ""
-    total_sessions = conn.execute(f"SELECT COUNT(*) FROM sessions WHERE 1=1 {uid}").fetchone()[0]
-    total_reviews  = conn.execute(f"SELECT COALESCE(SUM(total_reviews),0) FROM sessions WHERE 1=1 {uid}").fetchone()[0]
-    total_pos      = conn.execute(f"SELECT COALESCE(SUM(positive_count),0) FROM sessions WHERE 1=1 {uid}").fetchone()[0]
-    total_neg      = conn.execute(f"SELECT COALESCE(SUM(negative_count),0) FROM sessions WHERE 1=1 {uid}").fetchone()[0]
-    recent         = conn.execute(f"SELECT * FROM sessions WHERE 1=1 {uid} ORDER BY created_at DESC LIMIT 5").fetchall()
-    fake_total     = conn.execute("SELECT COALESCE(SUM(fake_count),0) FROM sessions WHERE 1=1").fetchone()[0]
-    total_tickets  = conn.execute(f"SELECT COALESCE(SUM(total_tickets),0) FROM ticket_sessions WHERE 1=1").fetchone()[0]
+    # Strict user isolation — each user only sees their own data
+    is_admin = user and user.get("role") == "admin"
+    if is_admin:
+        total_sessions = conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
+        total_reviews  = conn.execute("SELECT COALESCE(SUM(total_reviews),0) FROM sessions").fetchone()[0]
+        total_pos      = conn.execute("SELECT COALESCE(SUM(positive_count),0) FROM sessions").fetchone()[0]
+        total_neg      = conn.execute("SELECT COALESCE(SUM(negative_count),0) FROM sessions").fetchone()[0]
+        recent         = conn.execute("SELECT * FROM sessions ORDER BY created_at DESC LIMIT 5").fetchall()
+        fake_total     = conn.execute("SELECT COALESCE(SUM(fake_count),0) FROM sessions").fetchone()[0]
+        total_tickets  = conn.execute("SELECT COALESCE(SUM(total_tickets),0) FROM ticket_sessions").fetchone()[0]
+    elif user:
+        uid = user["id"]
+        total_sessions = conn.execute("SELECT COUNT(*) FROM sessions WHERE user_id=?", (uid,)).fetchone()[0]
+        total_reviews  = conn.execute("SELECT COALESCE(SUM(total_reviews),0) FROM sessions WHERE user_id=?", (uid,)).fetchone()[0]
+        total_pos      = conn.execute("SELECT COALESCE(SUM(positive_count),0) FROM sessions WHERE user_id=?", (uid,)).fetchone()[0]
+        total_neg      = conn.execute("SELECT COALESCE(SUM(negative_count),0) FROM sessions WHERE user_id=?", (uid,)).fetchone()[0]
+        recent         = conn.execute("SELECT * FROM sessions WHERE user_id=? ORDER BY created_at DESC LIMIT 5", (uid,)).fetchall()
+        fake_total     = conn.execute("SELECT COALESCE(SUM(fake_count),0) FROM sessions WHERE user_id=?", (uid,)).fetchone()[0]
+        total_tickets  = conn.execute("SELECT COALESCE(SUM(total_tickets),0) FROM ticket_sessions WHERE user_id=?", (uid,)).fetchone()[0]
+    else:
+        total_sessions = total_reviews = total_pos = total_neg = fake_total = total_tickets = 0
+        recent = []
     # Timeline 14 days
     timeline = []
     for i in range(13, -1, -1):
         d = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
-        r = conn.execute(f"SELECT COALESCE(SUM(total_reviews),0) t, COALESCE(SUM(positive_count),0) p, COALESCE(SUM(negative_count),0) n FROM sessions WHERE date(created_at)=? {uid}", (d,)).fetchone()
+        if is_admin:
+            r = conn.execute("SELECT COALESCE(SUM(total_reviews),0) t, COALESCE(SUM(positive_count),0) p, COALESCE(SUM(negative_count),0) n FROM sessions WHERE date(created_at)=?", (d,)).fetchone()
+        elif user:
+            r = conn.execute("SELECT COALESCE(SUM(total_reviews),0) t, COALESCE(SUM(positive_count),0) p, COALESCE(SUM(negative_count),0) n FROM sessions WHERE date(created_at)=? AND user_id=?", (d, user["id"])).fetchone()
+        else:
+            r = (0, 0, 0)
         timeline.append({"date": d, "total": r[0], "positive": r[1], "negative": r[2]})
     # Top topics
     topic_rows = conn.execute("SELECT topics FROM reviews WHERE topics IS NOT NULL LIMIT 5000").fetchall()
@@ -772,8 +796,13 @@ def list_ticket_sessions(search: Optional[str] = None, user=Depends(opt_user)):
     q = "SELECT * FROM ticket_sessions WHERE 1=1"
     params = []
     if user:
-        q += " AND (user_id=? OR user_id IS NULL)"
-        params.append(user["id"])
+        if user.get("role") == "admin":
+            pass  # admin sees all
+        else:
+            q += " AND user_id=?"
+            params.append(user["id"])
+    else:
+        q += " AND 1=0"
     if search:
         q += " AND name LIKE ?"
         params.append(f"%{search}%")
@@ -1483,7 +1512,7 @@ def bi_overview(user=Depends(opt_user)):
     q = "SELECT * FROM sessions WHERE 1=1"
     params = []
     if uid:
-        q += " AND (user_id=? OR user_id IS NULL)"
+        q += " AND user_id=?"
         params.append(uid)
     sessions_rows = conn.execute(q + " ORDER BY created_at DESC", params).fetchall()
     ticket_rows   = conn.execute("SELECT * FROM ticket_sessions ORDER BY created_at DESC").fetchall()
@@ -1552,7 +1581,7 @@ def bi_revenue_impact(user=Depends(opt_user)):
     q = "SELECT * FROM sessions WHERE 1=1"
     params = []
     if uid:
-        q += " AND (user_id=? OR user_id IS NULL)"
+        q += " AND user_id=?"
         params.append(uid)
     rows = conn.execute(q, params).fetchall()
     conn.close()
@@ -1601,7 +1630,7 @@ def bi_forecasting(user=Depends(opt_user)):
     q = "SELECT avg_score, total_reviews, created_at, positive_count, negative_count FROM sessions WHERE 1=1"
     params = []
     if uid:
-        q += " AND (user_id=? OR user_id IS NULL)"
+        q += " AND user_id=?"
         params.append(uid)
     rows = conn.execute(q + " ORDER BY created_at", params).fetchall()
     conn.close()
@@ -1646,7 +1675,7 @@ def bi_competitor_benchmark(user=Depends(opt_user)):
     q = "SELECT name, avg_score, positive_count, negative_count, total_reviews, fake_count FROM sessions WHERE 1=1"
     params = []
     if uid:
-        q += " AND (user_id=? OR user_id IS NULL)"
+        q += " AND user_id=?"
         params.append(uid)
     rows = conn.execute(q + " ORDER BY avg_score DESC", params).fetchall()
     conn.close()
@@ -1677,7 +1706,7 @@ def bi_auto_report(user=Depends(opt_user)):
     q = "SELECT * FROM sessions WHERE 1=1"
     params = []
     if uid:
-        q += " AND (user_id=? OR user_id IS NULL)"
+        q += " AND user_id=?"
         params.append(uid)
     rows = conn.execute(q + " ORDER BY created_at DESC LIMIT 10", params).fetchall()
     ticket_rows = conn.execute("SELECT * FROM ticket_sessions ORDER BY created_at DESC LIMIT 5").fetchall()
@@ -1771,7 +1800,7 @@ def brand_health(user=Depends(opt_user)):
     q = "SELECT * FROM sessions WHERE 1=1"
     params = []
     if uid:
-        q += " AND (user_id=? OR user_id IS NULL)"
+        q += " AND user_id=?"
         params.append(uid)
     q += " ORDER BY created_at DESC"
     sessions_raw = conn.execute(q, params).fetchall()
@@ -1835,7 +1864,7 @@ def brand_health_timeline(days: int = 30, user=Depends(opt_user)):
         q = f"SELECT COALESCE(SUM(total_reviews),0) t, COALESCE(SUM(positive_count),0) p, COALESCE(SUM(negative_count),0) n, COUNT(*) sessions FROM sessions WHERE date(created_at)=?"
         params = [d]
         if uid:
-            q += " AND (user_id=? OR user_id IS NULL)"
+            q += " AND user_id=?"
             params.append(uid)
         r = conn.execute(q, params).fetchone()
         if r and r[0] > 0:
@@ -1884,7 +1913,7 @@ def run_benchmark(req: BenchmarkReq, user=Depends(opt_user)):
         q = "SELECT * FROM sessions WHERE 1=1"
         params = []
         if uid:
-            q += " AND (user_id=? OR user_id IS NULL)"
+            q += " AND user_id=?"
             params.append(uid)
         q += " ORDER BY created_at DESC LIMIT 20"
         sessions_raw = conn.execute(q, params).fetchall()
@@ -2379,4 +2408,3 @@ def refresh_intelligence():
     """Force refresh the AI intelligence cache."""
     _gi_cache["ts"] = 0  # Expire cache
     return get_ai_intelligence()
- 

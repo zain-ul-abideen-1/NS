@@ -24,6 +24,15 @@ import BIHub              from './pages/BIHub'
 import GlobalIntelligence from './pages/GlobalIntelligence'
 import BrandHealth from './pages/BrandHealth'
 import Benchmark from './pages/Benchmark'
+import Workflow from './pages/Workflow'
+
+function AdminGuard({ children }) {
+  const { token, user, loading } = useApp()
+  if (loading) return null
+  if (!token) return <Navigate to="/login" replace />
+  if (user?.role !== 'admin') return <Navigate to="/" replace />
+  return children
+}
 
 function Guard({ children }) {
   const { token, loading } = useApp()
@@ -65,6 +74,7 @@ export default function App() {
         <Route path="studio"            element={<ReviewStudio />} />
         <Route path="bi"                element={<BIHub />} />
         <Route path="global"            element={<GlobalIntelligence />} />
+        <Route path="workflow"         element={<AdminGuard><Workflow /></AdminGuard>} />
         <Route path="*"               element={<Navigate to="/" />} />
       </Route>
     </Routes>
