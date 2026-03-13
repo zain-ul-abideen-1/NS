@@ -216,10 +216,13 @@ def analyze_review(text: str, original_text: str = None) -> dict:
     tb = TextBlob(t)
     tb_pol = tb.sentiment.polarity
 
-    # Base compound from VADER + TextBlob
-    compound = vs["compound"] * 0.65 + tb_pol * 0.35
+    # VADER is far more reliable than TextBlob for reviews.
+    # TextBlob fails badly on complex sentences (gives -0.94 on clearly positive text).
+    # Use VADER as primary (85%), TextBlob only as minor secondary (15%).
+    # Then apply rule-based correction for known VADER failure patterns.
+    compound = vs["compound"] * 0.85 + tb_pol * 0.15
 
-    # Apply rule-based correction to fix misclassifications
+    # Apply rule-based correction to fix remaining misclassifications
     correction = _rule_based_override(t)
     compound = max(-1.0, min(1.0, compound + correction))
 
