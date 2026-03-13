@@ -3,7 +3,7 @@ import re
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from textblob import TextBlob
 
-vader = SentimentIntensityAnalyzer()
+vader = SentimentIntensityAnalyzer() 
 
 STOPWORDS = set(
     "the a an is was were be been being have has had do does did will would could should "
