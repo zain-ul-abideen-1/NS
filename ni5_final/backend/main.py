@@ -87,16 +87,23 @@ def _read_file(data: bytes, filename: str) -> pd.DataFrame:
     raise ValueError(f"Unsupported file: {filename}")
 
 def _detect_text_col(df: pd.DataFrame) -> Optional[str]:
-    preferred = ["review","text","comment","feedback","body","description","content","message","review_text","review_body","ticket","subject","note"]
-    cols_lower = {c.lower(): c for c in df.columns}
-    for p in preferred:
-        if p in cols_lower:
-            return cols_lower[p]
+    keywords = ["description","review","text","comment","feedback","body","content",
+                "message","subject","note","ticket","complaint","detail","summary","narrative"]
+    cols_lower = {c.lower().strip(): c for c in df.columns}
+    # Exact match first
+    for kw in keywords:
+        if kw in cols_lower:
+            return cols_lower[kw]
+    # Partial match — column name CONTAINS the keyword
+    for kw in keywords:
+        for col_lower, col_orig in cols_lower.items():
+            if kw in col_lower:
+                return col_orig
+    # Fallback: longest average text among object columns
     text_cols = [c for c in df.columns if df[c].dtype == object]
     if not text_cols:
         return None
     return max(text_cols, key=lambda c: df[c].astype(str).str.len().mean())
-
 def _try_translate(result: dict):
     lang = result.get("language", "en")
     if lang and lang not in ("en", "unknown", ""):
