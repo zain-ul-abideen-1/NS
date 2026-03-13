@@ -619,24 +619,64 @@ GENERIC_PRAISE = ["best ever","must buy","highly recommend","perfect product","a
                   "great product","excellent service","love it","5 stars","wonderful product"]
 
 def _helpfulness(text: str) -> tuple:
+    """
+    Score how helpful a review is. A review is helpful when it is specific
+    and informative — regardless of length. Short precise reviews can be
+    just as helpful as long ones.
+    """
+    tl = text.lower()
     words = text.split()
     wc = len(words)
     score = 0.0
-    if 20 <= wc <= 150:     score += 0.35
-    elif wc > 150:           score += 0.2
-    elif wc >= 10:           score += 0.1
-    specifics = ["because","however","although","but","specifically","especially","compared",
-                 "issue","problem","feature","quality","delivery","price","worth","honestly",
-                 "though","despite","actually","specifically","particularly"]
-    score += min(0.30, sum(0.05 for s in specifics if s in text.lower()))
-    if any(c.isdigit() for c in text): score += 0.10
-    sents = [s.strip() for s in re.split(r'[.!?]', text) if s.strip()]
-    if len(sents) >= 3: score += 0.10
-    spam_pen = sum(0.1 for w in SPAM_WORDS if w in text.lower())
-    caps_r = sum(1 for c in text if c.isupper()) / max(len(text), 1)
-    if caps_r > 0.4: score -= 0.15
-    score = max(0.0, min(1.0, score - spam_pen))
-    label = "very helpful" if score >= 0.65 else "helpful" if score >= 0.4 else "somewhat helpful" if score >= 0.2 else "not helpful"
+
+    # ── Length signal (modest weight — short reviews can still be helpful) ──
+    if wc >= 30:        score += 0.30   # detailed
+    elif wc >= 15:      score += 0.25   # decent length
+    elif wc >= 8:       score += 0.20   # short but could be specific
+    elif wc >= 4:       score += 0.10   # very short
+    # under 4 words → 0 (e.g. "good", "ok")
+
+    # ── Specificity signal (most important factor) ──
+    # Contrast words → review mentions both sides = very informative
+    contrast = ["but","however","although","though","except","despite","yet",
+                "while","whereas","on the other hand","even though","still"]
+    has_contrast = any(w in tl for w in contrast)
+    if has_contrast: score += 0.25
+
+    # Topic-specific keywords → reviewer addresses real aspects
+    topic_words = ["quality","delivery","price","service","staff","food","taste",
+                   "environment","atmosphere","packaging","shipping","feature",
+                   "battery","screen","camera","speed","performance","design",
+                   "size","color","material","smell","texture","support","refund",
+                   "warranty","installation","setup","interface","ease","value",
+                   "worth","compared","issue","problem","broke","broken","works",
+                   "doesn't work","excellent","terrible","disappointing","impressive",
+                   "recommend","avoid","return","replace","upgrade"]
+    topic_hits = sum(1 for w in topic_words if w in tl)
+    score += min(0.30, topic_hits * 0.07)   # up to 0.30 for 4+ topic words
+
+    # Numbers / measurements → concrete details
+    if any(c.isdigit() for c in text): score += 0.08
+
+    # Multiple sentences → more thorough
+    sents = [s.strip() for s in re.split(r'[.!?]', text) if len(s.strip()) > 3]
+    if len(sents) >= 3: score += 0.08
+    elif len(sents) == 2: score += 0.04
+
+    # ── Penalties ──
+    spam_pen  = sum(0.12 for w in SPAM_WORDS if w in tl)
+    generic_p = sum(0.05 for g in GENERIC_PRAISE if g in tl)
+    caps_r    = sum(1 for c in text if c.isupper()) / max(len(text), 1)
+    caps_pen  = 0.15 if caps_r > 0.5 else 0.0
+
+    score = max(0.0, min(1.0, score - spam_pen - generic_p - caps_pen))
+
+    # ── Label thresholds ──
+    if score >= 0.60:   label = "very helpful"
+    elif score >= 0.38: label = "helpful"
+    elif score >= 0.18: label = "somewhat helpful"
+    else:               label = "not helpful"
+
     return round(score, 3), label
 
 def _spam_score(text: str) -> float:
@@ -1011,4 +1051,4 @@ def ticket_summary(results: list) -> dict:
         "escalate_pct":   round(esc/total*100, 1),
         "top_category":   top_cat,
         "needs_attention": crit + high,
-    } 
+    }
