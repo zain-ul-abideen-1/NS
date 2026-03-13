@@ -894,56 +894,24 @@ def analyze_review(text: str, original_text: str = None) -> dict:
     t = text.strip()
     tl = t.lower()
 
-    # ── Step 1: Hard rule override (highest priority) ──────────────
-    override = _sentiment_override(t)
+    # ── Professional Sentiment Engine (VADER + Domain-Aware Lexicon) ──
+    from sentiment_engine import get_sentiment as _se_get
+    se_result = _se_get(t)
+    sentiment     = se_result["sentiment"]
+    final_compound = se_result["score"]
 
-    # ML prediction with probability
+    # Also run ML for probabilities display (but DON'T use it for final label)
     probs = _SENT_MODEL.predict_proba([t])[0]
     classes = _SENT_MODEL.classes_
     prob_map = dict(zip(classes, probs))
-
-    ml_sentiment = classes[np.argmax(probs)]
     ml_confidence = float(np.max(probs))
-
-    # Lexical backup
     lex_score, pos_w, neg_w = _lexical_sentiment(t)
-    ml_diff = prob_map.get("positive", 0) - prob_map.get("negative", 0)
 
-    # ── Step 2: If rule override fired, use it — skip ML entirely ──
-    if override is not None:
-        sentiment = override
-        if override == "positive":
-            final_compound = max(0.15, ml_diff * 0.3 + abs(lex_score) * 0.7)
-        elif override == "negative":
-            final_compound = min(-0.15, ml_diff * 0.3 - abs(lex_score) * 0.7)
-        else:
-            final_compound = 0.0
-        final_compound = max(-1.0, min(1.0, final_compound))
-    else:
-        # ── Step 3: Normal ML + lexical fusion ──────────────────────
-        word_count = len(t.split())
-        if word_count <= 12 and abs(lex_score) > 0.25:
-            final_compound = lex_score * 0.60 + ml_diff * 0.40
-        elif abs(lex_score) > 0.4:
-            final_compound = lex_score * 0.50 + ml_diff * 0.50
-        else:
-            final_compound = ml_diff * 0.75 + lex_score * 0.25
-
-        final_compound = max(-1.0, min(1.0, final_compound))
-
-        if ml_sentiment == "positive" and lex_score >= -0.1:
-            sentiment = "positive"
-        elif ml_sentiment == "negative" and lex_score <= 0.1:
-            sentiment = "negative"
-        elif final_compound > 0.08:  sentiment = "positive"
-        elif final_compound < -0.08: sentiment = "negative"
-        else:                         sentiment = "neutral"
-
-    confidence = min(0.99, ml_confidence * 0.8 + abs(final_compound) * 0.2)
-
-    pos_p = float(prob_map.get("positive", 0.33))
-    neg_p = float(prob_map.get("negative", 0.33))
-    neu_p = float(prob_map.get("neutral",  0.34))
+    confidence = se_result.get("confidence", 0.85)
+    pos_p = se_result.get("positive_prob", 0.33)
+    neg_p = se_result.get("negative_prob", 0.33)
+    neu_p = se_result.get("neutral_prob",  0.34)
+    vader_c = se_result.get("vader_compound", 0.0)
 
     hs, hl = _helpfulness(t)
     auth_s, auth_l = _authenticity(t)
@@ -959,7 +927,7 @@ def analyze_review(text: str, original_text: str = None) -> dict:
         "negative_prob": round(neg_p, 4),
         "neutral_prob":  round(neu_p, 4),
         "subjectivity":  round(min(1.0, (pos_w + neg_w) / max(len(t.split()), 1) * 3), 4),
-        "vader_compound": round(lex_score, 4),
+        "vader_compound": round(vader_c, 4),
         "helpfulness_score":  hs,
         "helpfulness_label":  hl,
         "spam_score":         _spam_score(t),
