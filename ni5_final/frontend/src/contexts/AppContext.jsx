@@ -22,9 +22,10 @@ export function AppProvider({ children }) {
     else                   { html.classList.add('dark');   html.classList.remove('light') }
   }, [theme])
 
-  // Apply Google Translate + RTL whenever language changes
+  // Apply RTL direction for Urdu/Arabic on mount/change (no translation trigger)
   useEffect(() => {
-    if (lang) applyLanguage(lang)
+    document.documentElement.dir = (lang === 'ur' || lang === 'ar') ? 'rtl' : 'ltr'
+    document.documentElement.lang = lang
   }, [lang])
 
   // Axios auth header
@@ -79,6 +80,7 @@ export function AppProvider({ children }) {
 
   const setLanguage = useCallback((l) => {
     applyLang(l)
+    applyLanguage(l)   // trigger Google Translate — only on explicit user click
     axios.put('/api/auth/profile', { language: l }).catch(() => {})
   }, [])
 
