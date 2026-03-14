@@ -28,10 +28,10 @@ HF_API_KEY  = os.getenv("HF_API_KEY", "")   # free at huggingface.co/settings/to
 HF_API_URL  = "https://router.huggingface.co/hf-inference/models/"
 
 # Primary model — RoBERTa, best for product/service reviews
-HF_SENTIMENT_MODEL  = "smtriplett/bert_finetuned_product_reviews"
-# Backup models
-HF_SENTIMENT_MODEL2 = "cardiffnlp/twitter-roberta-base-sentiment-latest"
-HF_SENTIMENT_MODEL3 = "distilbert-base-uncased-finetuned-sst-2-english"
+# Amazon product review models — in order of preference
+HF_SENTIMENT_MODEL  = "LiYuan/amazon-review-sentiment-analysis"
+HF_SENTIMENT_MODEL2 = "Eugenia/roberta-base-bne-finetuned-amazon_reviews_multi"
+HF_SENTIMENT_MODEL3 = "cardiffnlp/twitter-roberta-base-sentiment-latest"
 
 _hf_cache = {}  # simple in-memory cache to avoid repeat API calls
 
@@ -69,14 +69,22 @@ def _hf_sentiment(text: str) -> dict | None:
                         "label_0": "negative", "negative": "negative",
                         "neg": "negative", "neutral": "neutral",
                         "neu": "neutral",
-                        # RoBERTa uses these
                         "LABEL_0": "negative", "LABEL_1": "neutral", "LABEL_2": "positive",
+                        # LiYuan amazon model uses 1-5 stars
+                        "1 star": "negative", "2 stars": "negative",
+                        "3 stars": "neutral",
+                        "4 stars": "positive", "5 stars": "positive",
                     }
                     best = max(scores, key=lambda x: x["score"])
-                    raw_label = best["label"].lower().replace(" ", "_")
-                    # Handle star ratings (nlptown model)
-                    if "star" in raw_label or raw_label.isdigit():
-                        stars = int(re.search(r'\d', raw_label).group())
+                    raw_label = best["label"].lower().strip()
+                    # Handle star ratings
+                    if "star" in raw_label:
+                        mapped = label_map.get(raw_label, None)
+                        if not mapped:
+                            stars = int(re.search(r'\d', raw_label).group())
+                            mapped = "positive" if stars >= 4 else "negative" if stars <= 2 else "neutral"
+                    elif raw_label.isdigit():
+                        stars = int(raw_label)
                         mapped = "positive" if stars >= 4 else "negative" if stars <= 2 else "neutral"
                     else:
                         mapped = label_map.get(raw_label, label_map.get(best["label"], None))

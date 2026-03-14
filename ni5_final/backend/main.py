@@ -2425,9 +2425,9 @@ def ai_status():
 
     if hf_key:
         test_models = [
-            "smtriplett/bert_finetuned_product_reviews",
+            "LiYuan/amazon-review-sentiment-analysis",
+            "Eugenia/roberta-base-bne-finetuned-amazon_reviews_multi",
             "cardiffnlp/twitter-roberta-base-sentiment-latest",
-            "distilbert-base-uncased-finetuned-sst-2-english",
         ]
         for model in test_models:
             try:
@@ -2468,7 +2468,7 @@ def ai_status():
         try:
             import google.generativeai as genai
             genai.configure(api_key=gemini_key)
-            model = genai.GenerativeModel("gemini-2.0-flash")
+            model = genai.GenerativeModel("gemini-1.5-flash-8b")
             r = model.generate_content("Say OK in one word")
             results["gemini"]["status"] = "✅ WORKING"
             results["gemini"]["response"] = r.text.strip()[:50]
@@ -2485,7 +2485,7 @@ def ai_status():
             import anthropic
             client = anthropic.Anthropic(api_key=anthropic_key)
             r = client.messages.create(
-                model="claude-haiku-4-5",
+                model="claude-3-haiku-20240307",
                 max_tokens=10,
                 messages=[{"role": "user", "content": "Say OK"}]
             )

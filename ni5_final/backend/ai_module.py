@@ -15,15 +15,29 @@ def _call_gemini(prompt: str, max_tokens: int = 600) -> str | None:
     try:
         import google.generativeai as genai
         genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel("gemini-2.0-flash")
-        response = model.generate_content(
-            prompt,
-            generation_config=genai.types.GenerationConfig(
-                max_output_tokens=max_tokens,
-                temperature=0.7,
-            )
-        )
-        return response.text.strip() if response.text else None
+        # Try models in order — free tier limits vary
+        gemini_models = ["gemini-1.5-flash-8b", "gemini-2.0-flash-lite", "gemini-1.5-flash", "gemini-2.0-flash"]
+        last_err = None
+        for model_name in gemini_models:
+            try:
+                model = genai.GenerativeModel(model_name)
+                response = model.generate_content(
+                    prompt,
+                    generation_config=genai.types.GenerationConfig(
+                        max_output_tokens=max_tokens,
+                        temperature=0.7,
+                    )
+                )
+                if response.text:
+                    return response.text.strip()
+            except Exception as me:
+                last_err = str(me).lower()
+                if "quota" in last_err or "429" in last_err:
+                    continue  # Try next model
+                if "api_key" in last_err or "invalid" in last_err or "401" in last_err:
+                    return "__INVALID_KEY__"
+                continue
+        return None
     except Exception as e:
         err = str(e).lower()
         if "api_key" in err or "invalid" in err or "401" in err:
@@ -38,7 +52,7 @@ def _call_claude(prompt: str, system: str = "", max_tokens: int = 600) -> str | 
         import anthropic
         client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
         r = client.messages.create(
-            model="claude-haiku-4-5",
+            model="claude-3-haiku-20240307",
             max_tokens=max_tokens,
             system=system or (
                 "You are NestInsights AI — a senior consumer intelligence analyst. "
