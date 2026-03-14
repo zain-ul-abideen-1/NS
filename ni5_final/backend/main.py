@@ -197,14 +197,17 @@ class UpdateProfileReq(BaseModel):
 
 class TextReq(BaseModel):
     text: str
+    hf_model: Optional[str] = None
 
 class BatchReq(BaseModel):
     texts: List[str]
     session_name: Optional[str] = None
+    hf_model: Optional[str] = None
 
 class URLReq(BaseModel):
     url: str
     session_name: Optional[str] = None
+    hf_model: Optional[str] = None
 
 class CompareReq(BaseModel):
     session_ids: List[str]
@@ -2420,6 +2423,119 @@ def refresh_intelligence():
     _gi_cache["ts"] = 0  # Expire cache
     return get_ai_intelligence()
 
+
+# ── Groq Assistant ─────────────────────────────────────────────────────────────
+class GroqAssistantReq(BaseModel):
+    message: str
+    history: Optional[List[dict]] = []
+
+@app.post("/api/groq-assistant")
+async def groq_assistant(req: GroqAssistantReq, user=Depends(opt_user)):
+    """
+    Multi-turn Groq (Llama 3) assistant with full system context.
+    Handles: product search, Global Intelligence manipulation, review analysis questions.
+    """
+    import requests as _req
+
+    groq_key = os.getenv("GROQ_API_KEY", "")
+    if not groq_key:
+        raise HTTPException(400, "GROQ_API_KEY not set in environment variables")
+
+    conn = get_conn()
+    # Build system context from user's data
+    try:
+        uid = user["id"] if user else None
+        if uid:
+            sessions = conn.execute(
+                "SELECT session_id, name, total_reviews, positive_count, negative_count, neutral_count, avg_score, top_keywords, created_at FROM sessions WHERE user_id=? ORDER BY created_at DESC LIMIT 5",
+                (uid,)
+            ).fetchall()
+            session_ctx = []
+            for s in sessions:
+                session_ctx.append(
+                    f"  - \"{s['name']}\" ({s['total_reviews']} reviews, {s['positive_count']} pos/{s['negative_count']} neg/{s['neutral_count']} neutral, avg score {s['avg_score']:.2f})"
+                )
+            sessions_text = "\n".join(session_ctx) if session_ctx else "  No sessions yet."
+        else:
+            sessions_text = "  User not logged in."
+
+        # Get current Global Intelligence cache if available
+        gi_text = "  No Global Intelligence data cached."
+        if _gi_cache.get("products"):
+            products = _gi_cache["products"][:5]
+            gi_lines = [f"  - {p.get('name','?')} (demand: {p.get('demand_score',0)}, margin: {p.get('margin_pct',0)}%)" for p in products]
+            gi_text = "\n".join(gi_lines)
+    except Exception:
+        sessions_text = "  Could not load session data."
+        gi_text = "  Could not load Global Intelligence data."
+    finally:
+        conn.close()
+
+    system_prompt = f"""You are NestInsights AI Assistant — an expert business intelligence assistant embedded in the NestInsights platform.
+
+PLATFORM CONTEXT:
+NestInsights is a consumer intelligence platform that analyzes customer reviews using ML (TF-IDF + SVC sentiment models) and AI (Claude/Groq).
+
+USER'S RECENT SESSIONS (last 5):
+{sessions_text}
+
+CURRENT GLOBAL INTELLIGENCE PRODUCTS (top 5):
+{gi_text}
+
+YOUR CAPABILITIES:
+1. Answer questions about the user's review data, sessions, sentiment trends
+2. Suggest trending products, business recommendations, market insights
+3. Analyze patterns in customer feedback
+4. Provide strategic recommendations based on review data
+
+RESPONSE STYLE:
+- Be concise and actionable
+- Use bullet points for lists
+- Reference actual numbers from the user's data when available
+- If asked about products, provide specific names with reasoning
+- Always be helpful and business-focused
+
+Note: You cannot directly modify the database, but you can provide structured recommendations the user can act on."""
+
+    # Build messages for Groq
+    messages = [{"role": "system", "content": system_prompt}]
+
+    # Add conversation history (last 10 turns max)
+    for h in (req.history or [])[-10:]:
+        role = h.get("role", "user")
+        if role in ("user", "assistant"):
+            messages.append({"role": role, "content": h.get("content", "")})
+
+    # Add current message
+    messages.append({"role": "user", "content": req.message})
+
+    try:
+        resp = _req.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {groq_key}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "llama-3.1-8b-instant",
+                "messages": messages,
+                "max_tokens": 1024,
+                "temperature": 0.7,
+            },
+            timeout=30
+        )
+        resp.raise_for_status()
+        reply = resp.json()["choices"][0]["message"]["content"].strip()
+        return {"reply": reply, "action": None}
+    except _req.exceptions.Timeout:
+        raise HTTPException(504, "Groq API timed out — try again")
+    except _req.exceptions.HTTPError as e:
+        status = e.response.status_code if e.response else 500
+        detail = e.response.text[:200] if e.response else str(e)
+        raise HTTPException(status, f"Groq API error: {detail}")
+    except Exception as e:
+        raise HTTPException(500, f"Groq assistant error: {str(e)[:200]}")
+
 @app.get("/api/ai-status")
 def ai_status():
     """
@@ -2561,4 +2677,4 @@ def ai_status():
         "status": "NestInsights AI Status Check",
         "timestamp": datetime.now().isoformat(),
         "results": results
-    } 
+    }
