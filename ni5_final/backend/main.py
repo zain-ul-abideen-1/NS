@@ -2561,4 +2561,4 @@ def ai_status():
         "status": "NestInsights AI Status Check",
         "timestamp": datetime.now().isoformat(),
         "results": results
-    }
+    } 

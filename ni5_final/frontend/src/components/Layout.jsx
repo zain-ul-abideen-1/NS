@@ -4,17 +4,19 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, Search, Type, Clock, GitCompare, TrendingUp,
   Ticket, Shield, User, LogOut, Sun, Moon, ChevronLeft, ChevronRight,
-  Menu, Eye, Database, Sparkles, BarChart2, Wrench, Globe2, GitBranch
+  Menu, Eye, Database, Sparkles, BarChart2, Wrench, Globe2, GitBranch, Zap
 } from 'lucide-react'
 import { useApp } from '../contexts/AppContext'
 import { LANGS } from '../i18n'
 import ToolsPanel from './ToolsPanel'
+import GroqAssistant from './GroqAssistant'
 
 export default function Layout() {
   const { user, logout, theme, setTheme, language, setLanguage } = useApp()
   const [collapsed,   setCollapsed]   = useState(false)
   const [mobileOpen,  setMobileOpen]  = useState(false)
   const [toolsOpen,   setToolsOpen]   = useState(false)
+  const [groqOpen,    setGroqOpen]    = useState(false)
   const navigate = useNavigate()
 
   const NAV_TOP = [
@@ -124,6 +126,15 @@ export default function Layout() {
             </div>
           )}
 
+          {/* Groq Assistant */}
+          <button onClick={() => setGroqOpen(t => !t)}
+            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${collapsed ? 'justify-center' : ''} ${groqOpen ? 'text-white' : 'text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--border)]'}`}
+            style={groqOpen ? {background:'linear-gradient(135deg,#7c3aed,#4f46e5)'} : {}}>
+            <Zap size={14}/>
+            {!collapsed && <span>Groq Assistant</span>}
+            {!collapsed && groqOpen && <span className="ml-auto text-[9px] bg-white/20 px-1.5 py-0.5 rounded-full font-bold">AI</span>}
+          </button>
+
           {/* Tools Panel trigger */}
           <button onClick={() => setToolsOpen(t => !t)}
             className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${collapsed ? 'justify-center' : ''} ${toolsOpen ? 'text-white' : 'text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--border)]'}`}
@@ -206,6 +217,11 @@ export default function Layout() {
 
       {/* Tools Panel */}
       {toolsOpen && <ToolsPanel onClose={() => setToolsOpen(false)} />}
+
+      {/* Groq Assistant */}
+      <AnimatePresence>
+        {groqOpen && <GroqAssistant onClose={() => setGroqOpen(false)} />}
+      </AnimatePresence>
 
       {/* Main area */}
       <div className="flex-1 flex flex-col overflow-hidden">
