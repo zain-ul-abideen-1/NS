@@ -37,21 +37,29 @@ HF_SENTIMENT_MODEL5 = "cardiffnlp/twitter-roberta-base-sentiment-latest"  # fina
 
 _hf_cache = {}  # simple in-memory cache to avoid repeat API calls
 
-def _hf_sentiment(text: str) -> dict | None:
+def _hf_sentiment(text: str, model_override: str = None) -> dict | None:
     """
     Call HuggingFace Inference API for sentiment.
+    If model_override is given, use ONLY that model (user explicitly chose it).
+    Otherwise try all models in order until one works.
     Returns {label, score} or None if unavailable.
     """
     if not HF_API_KEY:
         return None
 
-    cache_key = text[:200]
+    cache_key = (model_override or "auto") + "|" + text[:200]
     if cache_key in _hf_cache:
         return _hf_cache[cache_key]
 
     headers = {"Authorization": f"Bearer {HF_API_KEY}"}
 
-    for model in [HF_SENTIMENT_MODEL, HF_SENTIMENT_MODEL2, HF_SENTIMENT_MODEL3, HF_SENTIMENT_MODEL4, HF_SENTIMENT_MODEL5]:
+    # If user explicitly selected a model, try it first and only fall back if it 503s
+    if model_override and model_override.strip():
+        model_list = [model_override.strip(), HF_SENTIMENT_MODEL5]  # selected + fast fallback
+    else:
+        model_list = [HF_SENTIMENT_MODEL, HF_SENTIMENT_MODEL2, HF_SENTIMENT_MODEL3, HF_SENTIMENT_MODEL4, HF_SENTIMENT_MODEL5]
+
+    for model in model_list:
         try:
             resp = requests.post(
                 HF_API_URL + model,
@@ -420,8 +428,9 @@ def analyze_review(text: str, original_text: str = None) -> dict:
         return {}
     t = text.strip()
 
-    # Step 1: Try HuggingFace RoBERTa (best accuracy)
-    hf = _hf_sentiment(t)
+    # Step 1: Try HuggingFace model — use the one selected by the user (HF_SENTIMENT_MODEL)
+    # HF_SENTIMENT_MODEL is set per-request by _set_hf_model() when user picks a model button
+    hf = _hf_sentiment(t, model_override=HF_SENTIMENT_MODEL)
 
     if hf:
         sentiment    = hf["sentiment"]

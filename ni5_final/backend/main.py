@@ -35,10 +35,11 @@ app.add_middleware(
 init_db()
 
 def _set_hf_model(model_id: str):
-    """Temporarily override the HF model for this request."""
+    """Override the HF model for this request and clear cache so results are fresh."""
     import ml_engine
     if model_id and model_id.strip():
         ml_engine.HF_SENTIMENT_MODEL = model_id.strip()
+        ml_engine._hf_cache.clear()  # clear cache so switching models gives fresh results
 
 
 pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
