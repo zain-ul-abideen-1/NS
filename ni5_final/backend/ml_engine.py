@@ -653,4 +653,4 @@ def ticket_summary(results: list) -> dict:
         "escalate_pct":   round(esc/total*100, 1),
         "top_category":   top_cat,
         "needs_attention": crit + high,
-    }
+    } 

@@ -559,4 +559,4 @@ def _fallback_compare_insights(comparisons: list, winner: dict) -> str:
         gap = round(best.get('positive_pct',0) - worst.get('positive_pct',0), 1)
         parts.append(f"There is a {gap} percentage point gap between best and worst performing sessions.")
     parts.append("Focus improvement efforts on the lowest-scoring session by addressing the most common negative topic themes.")
-    return " ".join(parts)
+    return " ".join(parts) 
