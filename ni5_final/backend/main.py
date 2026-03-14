@@ -2408,3 +2408,111 @@ def refresh_intelligence():
     """Force refresh the AI intelligence cache."""
     _gi_cache["ts"] = 0  # Expire cache
     return get_ai_intelligence()
+
+@app.get("/api/ai-status")
+def ai_status():
+    """
+    Test all AI integrations live.
+    Visit: https://your-railway-url.up.railway.app/api/ai-status
+    """
+    import os, requests as req, time
+
+    results = {}
+
+    # 1. HuggingFace
+    hf_key = os.getenv("HF_API_KEY", "")
+    results["huggingface"] = {"key_set": bool(hf_key), "models": {}}
+
+    if hf_key:
+        test_models = [
+            "smtriplett/bert_finetuned_product_reviews",
+            "cardiffnlp/twitter-roberta-base-sentiment-latest",
+            "distilbert-base-uncased-finetuned-sst-2-english",
+        ]
+        for model in test_models:
+            try:
+                t0 = time.time()
+                r = req.post(
+                    f"https://api-inference.huggingface.co/models/{model}",
+                    headers={"Authorization": f"Bearer {hf_key}"},
+                    json={"inputs": "This product is absolutely amazing!"},
+                    timeout=10
+                )
+                elapsed = round(time.time() - t0, 2)
+                if r.status_code == 200:
+                    data = r.json()
+                    results["huggingface"]["models"][model] = {
+                        "status": "✅ WORKING",
+                        "response_time": f"{elapsed}s",
+                        "sample_output": str(data)[:120]
+                    }
+                elif r.status_code == 503:
+                    results["huggingface"]["models"][model] = {
+                        "status": "⏳ LOADING (try again in 20s)",
+                        "response_time": f"{elapsed}s"
+                    }
+                else:
+                    results["huggingface"]["models"][model] = {
+                        "status": f"❌ ERROR {r.status_code}",
+                        "detail": r.text[:100]
+                    }
+            except Exception as e:
+                results["huggingface"]["models"][model] = {"status": f"❌ FAILED: {str(e)[:80]}"}
+    else:
+        results["huggingface"]["note"] = "❌ HF_API_KEY not set in Railway variables"
+
+    # 2. Gemini
+    gemini_key = os.getenv("GEMINI_API_KEY", "")
+    results["gemini"] = {"key_set": bool(gemini_key)}
+    if gemini_key:
+        try:
+            import google.generativeai as genai
+            genai.configure(api_key=gemini_key)
+            model = genai.GenerativeModel("gemini-1.5-flash")
+            r = model.generate_content("Say OK in one word")
+            results["gemini"]["status"] = "✅ WORKING"
+            results["gemini"]["response"] = r.text.strip()[:50]
+        except Exception as e:
+            results["gemini"]["status"] = f"❌ FAILED: {str(e)[:100]}"
+    else:
+        results["gemini"]["status"] = "❌ GEMINI_API_KEY not set"
+
+    # 3. Anthropic
+    anthropic_key = os.getenv("ANTHROPIC_API_KEY", "")
+    results["anthropic"] = {"key_set": bool(anthropic_key)}
+    if anthropic_key:
+        try:
+            import anthropic
+            client = anthropic.Anthropic(api_key=anthropic_key)
+            r = client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=10,
+                messages=[{"role": "user", "content": "Say OK"}]
+            )
+            results["anthropic"]["status"] = "✅ WORKING"
+        except Exception as e:
+            results["anthropic"]["status"] = f"❌ FAILED: {str(e)[:100]}"
+    else:
+        results["anthropic"]["status"] = "❌ ANTHROPIC_API_KEY not set"
+
+    # 4. Test actual sentiment analysis
+    results["sentiment_test"] = {}
+    test_reviews = [
+        "LendingClub is a fast way to refinance debt at a lower rate. Funds appeared next day.",
+        "This product is absolutely terrible, broken on arrival, worst purchase ever.",
+        "The way employees explained everything was refreshing, other banks never did that.",
+    ]
+    for review in test_reviews:
+        from ml_engine import analyze_review
+        r = analyze_review(review)
+        results["sentiment_test"][review[:50] + "..."] = {
+            "sentiment": r.get("sentiment"),
+            "score": r.get("score"),
+            "model_used": r.get("model_used", "unknown")
+        }
+
+    return {
+        "status": "NestInsights AI Status Check",
+        "timestamp": datetime.now().isoformat(),
+        "results": results
+    }
