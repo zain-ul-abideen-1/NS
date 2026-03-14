@@ -25,7 +25,7 @@ _vader = SentimentIntensityAnalyzer()
 
 # ── HuggingFace Inference API ────────────────────────────────────
 HF_API_KEY  = os.getenv("HF_API_KEY", "")   # free at huggingface.co/settings/tokens
-HF_API_URL  = "https://api-inference.huggingface.co/models/"
+HF_API_URL  = "https://router.huggingface.co/hf-inference/models/"
 
 # Primary model — RoBERTa, best for product/service reviews
 HF_SENTIMENT_MODEL  = "smtriplett/bert_finetuned_product_reviews"

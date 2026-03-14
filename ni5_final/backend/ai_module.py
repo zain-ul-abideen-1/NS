@@ -15,7 +15,7 @@ def _call_gemini(prompt: str, max_tokens: int = 600) -> str | None:
     try:
         import google.generativeai as genai
         genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-2.0-flash")
         response = model.generate_content(
             prompt,
             generation_config=genai.types.GenerationConfig(
@@ -38,7 +38,7 @@ def _call_claude(prompt: str, system: str = "", max_tokens: int = 600) -> str | 
         import anthropic
         client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
         r = client.messages.create(
-            model="claude-haiku-4-5-20251001",
+            model="claude-haiku-4-5",
             max_tokens=max_tokens,
             system=system or (
                 "You are NestInsights AI — a senior consumer intelligence analyst. "
@@ -559,4 +559,4 @@ def _fallback_compare_insights(comparisons: list, winner: dict) -> str:
         gap = round(best.get('positive_pct',0) - worst.get('positive_pct',0), 1)
         parts.append(f"There is a {gap} percentage point gap between best and worst performing sessions.")
     parts.append("Focus improvement efforts on the lowest-scoring session by addressing the most common negative topic themes.")
-    return " ".join(parts) 
+    return " ".join(parts)

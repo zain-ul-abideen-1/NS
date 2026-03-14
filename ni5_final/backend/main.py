@@ -2433,7 +2433,7 @@ def ai_status():
             try:
                 t0 = time.time()
                 r = req.post(
-                    f"https://api-inference.huggingface.co/models/{model}",
+                    f"https://router.huggingface.co/hf-inference/models/{model}",
                     headers={"Authorization": f"Bearer {hf_key}"},
                     json={"inputs": "This product is absolutely amazing!"},
                     timeout=10
@@ -2468,7 +2468,7 @@ def ai_status():
         try:
             import google.generativeai as genai
             genai.configure(api_key=gemini_key)
-            model = genai.GenerativeModel("gemini-1.5-flash")
+            model = genai.GenerativeModel("gemini-2.0-flash")
             r = model.generate_content("Say OK in one word")
             results["gemini"]["status"] = "✅ WORKING"
             results["gemini"]["response"] = r.text.strip()[:50]
@@ -2485,7 +2485,7 @@ def ai_status():
             import anthropic
             client = anthropic.Anthropic(api_key=anthropic_key)
             r = client.messages.create(
-                model="claude-haiku-4-5-20251001",
+                model="claude-haiku-4-5",
                 max_tokens=10,
                 messages=[{"role": "user", "content": "Say OK"}]
             )
