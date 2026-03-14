@@ -2472,31 +2472,47 @@ async def groq_assistant(req: GroqAssistantReq, user=Depends(opt_user)):
     finally:
         conn.close()
 
-    system_prompt = f"""You are NestInsights AI Assistant — an expert business intelligence assistant embedded in the NestInsights platform.
+    # Full current GI product list for context
+    all_gi_products = _gi_cache.get("products", [])
+    gi_full_text = "  No products in Global Intelligence yet."
+    if all_gi_products:
+        gi_full_text = "\n".join([
+            f"  [{i}] {p.get('name','?')}) | demand:{p.get('demand_score',0)} margin:{p.get('margin_pct',0)}% urgency:{p.get('stock_urgency','?')}"
+            for i, p in enumerate(all_gi_products)
+        ])
 
-PLATFORM CONTEXT:
-NestInsights is a consumer intelligence platform that analyzes customer reviews using ML (TF-IDF + SVC sentiment models) and AI (Claude/Groq).
+    system_prompt = f"""You are NestInsights AI Assistant — an intelligent assistant with REAL WRITE ACCESS to the Global Intelligence product feed.
 
 USER'S RECENT SESSIONS (last 5):
 {sessions_text}
 
-CURRENT GLOBAL INTELLIGENCE PRODUCTS (top 5):
-{gi_text}
+CURRENT GLOBAL INTELLIGENCE PRODUCTS (all {len(all_gi_products)} products):
+{gi_full_text}
 
-YOUR CAPABILITIES:
-1. Answer questions about the user's review data, sessions, sentiment trends
-2. Suggest trending products, business recommendations, market insights
-3. Analyze patterns in customer feedback
-4. Provide strategic recommendations based on review data
+=== CRITICAL: ACTION SYSTEM ===
+When the user asks you to ADD, REMOVE, or REPLACE products in Global Intelligence, you MUST respond with a JSON action block.
+Your entire response must be valid JSON in this exact format — nothing else, no extra text outside the JSON:
 
-RESPONSE STYLE:
-- Be concise and actionable
-- Use bullet points for lists
-- Reference actual numbers from the user's data when available
-- If asked about products, provide specific names with reasoning
-- Always be helpful and business-focused
+For ADDING products:
+{{"action": "add_products", "products": [{{"name": "Product Name", "category": "Tech", "demand_score": 85, "margin_pct": 35, "price_range": "$50-$200", "trend": "rising", "insight": "Brief insight", "stock_urgency": "High", "target_regions": ["Global"]}}, ...], "reply": "I have added X products to your Global Intelligence feed: ..."}}
 
-Note: You cannot directly modify the database, but you can provide structured recommendations the user can act on."""
+For REMOVING products (use index numbers from the list above):
+{{"action": "remove_products", "ids": [0, 1, 2], "reply": "I removed X products from Global Intelligence."}}
+
+For REPLACING all products:
+{{"action": "replace_products", "products": [...same structure as add...], "reply": "I replaced Global Intelligence with X new products focused on ..."}}
+
+For REGULAR QUESTIONS (no GI modification needed):
+{{"action": null, "reply": "Your answer here..."}}
+
+RULES:
+- Always generate 5-10 products when asked to add/replace (unless user specifies a count)
+- demand_score: 0-100 integer
+- margin_pct: realistic percentage integer
+- stock_urgency: "Critical" | "High" | "Medium" | "Low"
+- Be specific with product names (brand + model where applicable)
+- For remove: reference the index numbers shown above
+- Your reply text goes in the "reply" field — always friendly and informative"""
 
     # Build messages for Groq
     messages = [{"role": "system", "content": system_prompt}]
@@ -2520,14 +2536,56 @@ Note: You cannot directly modify the database, but you can provide structured re
             json={
                 "model": "llama-3.1-8b-instant",
                 "messages": messages,
-                "max_tokens": 1024,
+                "max_tokens": 1500,
                 "temperature": 0.7,
             },
             timeout=30
         )
         resp.raise_for_status()
-        reply = resp.json()["choices"][0]["message"]["content"].strip()
-        return {"reply": reply, "action": None}
+        raw = resp.json()["choices"][0]["message"]["content"].strip()
+
+        # Parse the JSON response
+        import re as _re
+        json_match = _re.search(r'\{.*\}', raw, _re.DOTALL)
+        action_obj = None
+        reply = raw
+
+        if json_match:
+            try:
+                parsed = json.loads(json_match.group())
+                reply = parsed.get("reply", raw)
+                action_type = parsed.get("action")
+
+                if action_type == "add_products":
+                    new_products = parsed.get("products", [])
+                    if new_products:
+                        # Append to existing GI cache
+                        existing = _gi_cache.get("products", [])
+                        combined = existing + new_products
+                        _gi_cache["products"] = combined[:20]  # keep max 20
+                        _gi_cache["ts"] = time.time()
+                        action_obj = {"action": "add_products", "products": new_products}
+
+                elif action_type == "remove_products":
+                    ids_to_remove = set(parsed.get("ids", []))
+                    existing = _gi_cache.get("products", [])
+                    _gi_cache["products"] = [p for i, p in enumerate(existing) if i not in ids_to_remove]
+                    _gi_cache["ts"] = time.time()
+                    action_obj = {"action": "remove_products", "ids": list(ids_to_remove)}
+
+                elif action_type == "replace_products":
+                    new_products = parsed.get("products", [])
+                    if new_products:
+                        _gi_cache["products"] = new_products[:20]
+                        _gi_cache["ts"] = time.time()
+                        action_obj = {"action": "replace_products", "products": new_products}
+
+            except (json.JSONDecodeError, Exception):
+                # Not valid JSON — treat whole response as plain reply
+                reply = raw
+
+        return {"reply": reply, "action": action_obj}
+
     except _req.exceptions.Timeout:
         raise HTTPException(504, "Groq API timed out — try again")
     except _req.exceptions.HTTPError as e:
