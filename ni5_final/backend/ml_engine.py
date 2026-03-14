@@ -570,4 +570,4 @@ def ticket_summary(results):
             "avg_urgency":round(avg_urg,3),"critical_count":crit,"high_count":high,"escalate_count":esc,
             "negative_count":sum(1 for r in results if r.get("sentiment")=="negative"),
             "critical_pct":round(crit/total*100,1),"escalate_pct":round(esc/total*100,1),
-            "top_category":top_cat,"needs_attention":crit+high}
+            "top_category":top_cat,"needs_attention":crit+high} 

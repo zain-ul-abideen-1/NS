@@ -2425,9 +2425,16 @@ def ai_status():
 
     if hf_key:
         test_models = [
-            "LiYuan/amazon-review-sentiment-analysis",
-            "Eugenia/roberta-base-bne-finetuned-amazon_reviews_multi",
+            # Your suggestions
+            "lxyuan/distilbert-base-multilingual-cased-sentiments-student",
+            "ivanzidov/setfit-product-review-regression",
+            # Confirmed working
             "cardiffnlp/twitter-roberta-base-sentiment-latest",
+            # Other reliable candidates
+            "nlptown/bert-base-multilingual-uncased-sentiment",
+            "siebert/sentiment-roberta-large-english",
+            "finiteautomata/bertweet-base-sentiment-analysis",
+            "tabularisai/multilingual-sentiment-analysis",
         ]
         for model in test_models:
             try:
@@ -2461,6 +2468,27 @@ def ai_status():
     else:
         results["huggingface"]["note"] = "❌ HF_API_KEY not set in Railway variables"
 
+    # 1b. Groq (free)
+    groq_key = os.getenv("GROQ_API_KEY", "")
+    results["groq"] = {"key_set": bool(groq_key)}
+    if groq_key:
+        try:
+            import requests as _req
+            r = _req.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
+                json={"model": "llama-3.1-8b-instant", "messages": [{"role": "user", "content": "Say OK"}], "max_tokens": 5},
+                timeout=10
+            )
+            if r.status_code == 200:
+                results["groq"]["status"] = "✅ WORKING — " + r.json()["choices"][0]["message"]["content"].strip()
+            else:
+                results["groq"]["status"] = f"❌ ERROR {r.status_code}: {r.text[:80]}"
+        except Exception as e:
+            results["groq"]["status"] = f"❌ FAILED: {str(e)[:80]}"
+    else:
+        results["groq"]["status"] = "❌ GROQ_API_KEY not set — get free key at groq.com"
+
     # 2. Gemini
     gemini_key = os.getenv("GEMINI_API_KEY", "")
     results["gemini"] = {"key_set": bool(gemini_key)}
@@ -2468,7 +2496,7 @@ def ai_status():
         try:
             import google.generativeai as genai
             genai.configure(api_key=gemini_key)
-            model = genai.GenerativeModel("gemini-1.5-flash-8b")
+            model = genai.GenerativeModel("gemini-1.5-flash")
             r = model.generate_content("Say OK in one word")
             results["gemini"]["status"] = "✅ WORKING"
             results["gemini"]["response"] = r.text.strip()[:50]

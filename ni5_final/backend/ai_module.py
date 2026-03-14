@@ -7,6 +7,7 @@ import os, re, random, json
 
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 GEMINI_API_KEY    = os.getenv("GEMINI_API_KEY", "")
+GROQ_API_KEY      = os.getenv("GROQ_API_KEY", "")   # FREE: groq.com — 14400 req/day, no credit card
 
 # ─── Gemini Caller (FREE) ────────────────────────────────────────
 def _call_gemini(prompt: str, max_tokens: int = 600) -> str | None:
@@ -16,7 +17,7 @@ def _call_gemini(prompt: str, max_tokens: int = 600) -> str | None:
         import google.generativeai as genai
         genai.configure(api_key=GEMINI_API_KEY)
         # Try models in order — free tier limits vary
-        gemini_models = ["gemini-1.5-flash-8b", "gemini-2.0-flash-lite", "gemini-1.5-flash", "gemini-2.0-flash"]
+        gemini_models = ["gemini-1.5-flash", "gemini-2.0-flash-exp", "gemini-pro", "gemini-1.5-flash-latest"]
         last_err = None
         for model_name in gemini_models:
             try:
@@ -68,14 +69,53 @@ def _call_claude(prompt: str, system: str = "", max_tokens: int = 600) -> str | 
             return "__INVALID_KEY__"
         return None
 
+
+# ─── Groq Caller (FREE — 14400 req/day, Llama 3 + Mixtral) ──────────────────
+def _call_groq(prompt: str, max_tokens: int = 600) -> str | None:
+    if not GROQ_API_KEY:
+        return None
+    try:
+        import requests
+        models = ["llama-3.1-8b-instant", "mixtral-8x7b-32768", "gemma2-9b-it"]
+        for model_name in models:
+            try:
+                resp = requests.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {GROQ_API_KEY}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": model_name,
+                        "messages": [{"role": "user", "content": prompt}],
+                        "max_tokens": max_tokens,
+                        "temperature": 0.7,
+                    },
+                    timeout=15
+                )
+                if resp.status_code == 200:
+                    return resp.json()["choices"][0]["message"]["content"].strip()
+                elif resp.status_code == 429:
+                    continue  # Rate limit, try next model
+            except Exception:
+                continue
+        return None
+    except Exception:
+        return None
+
 # ─── Unified AI caller — Gemini first, Claude fallback ───────────
 def _call_ai(prompt: str, system: str = "", max_tokens: int = 600) -> str | None:
-    # Try Gemini first (free)
+    # 1. Groq (completely free, 14400/day, fastest)
+    if GROQ_API_KEY:
+        result = _call_groq(prompt, max_tokens)
+        if result:
+            return result
+    # 2. Gemini (free quota)
     if GEMINI_API_KEY:
         result = _call_gemini(prompt, max_tokens)
         if result and result != "__INVALID_KEY__":
             return result
-    # Try Claude as fallback
+    # 3. Anthropic Claude (paid fallback)
     if ANTHROPIC_API_KEY:
         result = _call_claude(prompt, system, max_tokens)
         if result and result != "__INVALID_KEY__":
