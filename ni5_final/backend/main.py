@@ -1346,8 +1346,8 @@ def generate_digest(req: DigestReq, user=Depends(opt_user)):
         f"Tone: professional, actionable, boardroom-ready."
     )
 
-    from ai_module import _call_claude
-    digest = _call_claude(prompt, max_tokens=600)
+    from ai_module import _call_ai
+    digest = _call_ai(prompt, max_tokens=600)
     if not digest or digest == "__INVALID_KEY__":
         digest = (
             f"Review Intelligence Digest — {req.period}\n\n"
@@ -1472,10 +1472,8 @@ class StudioScoreReq(BaseModel):
     reply: str
 
 def _studio_call(prompt: str, system: str = "", max_tokens: int = 800) -> Optional[str]:
-    from ai_module import _call_claude, ANTHROPIC_API_KEY
-    if not ANTHROPIC_API_KEY:
-        return None
-    return _call_claude(prompt, system=system, max_tokens=max_tokens)
+    from ai_module import _call_ai
+    return _call_ai(prompt, max_tokens=max_tokens)
 
 @app.post("/api/studio/bulk-reply")
 def studio_bulk_reply(req: StudioBulkReq):
@@ -1746,8 +1744,8 @@ def bi_auto_report(user=Depends(opt_user)):
         f"4. Top 3 strategic recommendations\n"
         f"Professional business tone, no markdown headers, no bullet lists."
     )
-    from ai_module import _call_claude
-    report = _call_claude(prompt, max_tokens=700)
+    from ai_module import _call_ai
+    report = _call_ai(prompt, max_tokens=700)
     if not report or report == "__INVALID_KEY__":
         report = (
             f"Executive Summary: Analysis of {total_r} reviews across {len(sessions)} sessions shows an average sentiment score of {avg_score:.3f}. "
@@ -1980,8 +1978,8 @@ def run_benchmark(req: BenchmarkReq, user=Depends(opt_user)):
         f"3. Three specific actions to reach top quartile performance\n"
         f"Be direct, specific, and business-ready."
     )
-    from ai_module import _call_claude
-    analysis = _call_claude(prompt, max_tokens=600)
+    from ai_module import _call_ai
+    analysis = _call_ai(prompt, max_tokens=600)
     if not analysis or analysis == "__INVALID_KEY__":
         gap = your_positive_pct - industry_pos
         gap_str = f"ahead of the industry average by {gap:.1f}%" if gap > 0 else f"behind the industry average by {abs(gap):.1f}%"
@@ -2303,13 +2301,13 @@ def get_ai_intelligence():
             "headline": h,
         })
 
-    # Step 4: Use Claude to generate unlimited relevant products with insights
-    from ai_module import _call_claude, ANTHROPIC_API_KEY
+    # Step 4: Use Groq/Gemini/Claude to generate trending products from live headlines
+    from ai_module import _call_ai
 
     headlines_text = "\n".join(f"- {h}" for h in all_headlines)
     today = datetime.now().strftime("%B %d, %Y")
 
-    if ANTHROPIC_API_KEY:
+    if True:  # Always try AI
         prompt = (
             f"Today is {today}. Based on these REAL current world headlines:\n{headlines_text}\n\n"
             f"Generate a JSON array of 20 trending products that businesses should stock/sell RIGHT NOW "
@@ -2330,8 +2328,8 @@ def get_ai_intelligence():
             f"Make products SPECIFIC (e.g. 'Jackery Explorer 1000 Portable Power Station' not just 'generator'). "
             f"Include a mix of physical products AND digital services. Be creative and data-driven."
         )
-        result = _call_claude(prompt, max_tokens=2500)
-        if result and result != "__INVALID_KEY__":
+        result = _call_ai(prompt, max_tokens=2500)
+        if result:
             try:
                 # Clean and parse JSON
                 clean = re.sub(r'```json|```', '', result).strip()
