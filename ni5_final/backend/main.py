@@ -34,6 +34,13 @@ app.add_middleware(
 )
 init_db()
 
+def _set_hf_model(model_id: str):
+    """Temporarily override the HF model for this request."""
+    import ml_engine
+    if model_id and model_id.strip():
+        ml_engine.HF_SENTIMENT_MODEL = model_id.strip()
+
+
 pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2  = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
@@ -299,6 +306,7 @@ def update_profile(req: UpdateProfileReq, user=Depends(get_current_user)):
 # ── Detect columns ────────────────────────────────────────────────────────────
 @app.post("/api/detect/columns")
 async def detect_columns(file: UploadFile = File(...)):
+    if hf_model: _set_hf_model(hf_model)
     data = await file.read()
     try:
         df = _read_file(data, file.filename)
@@ -320,6 +328,7 @@ def analyze_text(req: TextReq, user=Depends(opt_user)):
 
 @app.post("/api/analyze/batch")
 def analyze_batch(req: BatchReq, user=Depends(opt_user)):
+    if req.hf_model: _set_hf_model(req.hf_model)
     results = batch_analyze([str(t) for t in req.texts])
     for r in results:
         r["language"] = _detect_lang(r.get("text",""))
@@ -335,6 +344,7 @@ def analyze_batch(req: BatchReq, user=Depends(opt_user)):
 
 @app.post("/api/analyze/url")
 def analyze_url(req: URLReq, user=Depends(opt_user)):
+    if req.hf_model: _set_hf_model(req.hf_model)
     scraped = scrape_reviews(req.url)
     if not scraped["scraped"]:
         return {"scraped": False, "count": 0, "message": scraped["message"], "error": scraped["error"]}
@@ -367,8 +377,10 @@ async def analyze_dataset(
     file: UploadFile = File(...),
     text_col: Optional[str] = None,
     session_name: Optional[str] = None,
+    hf_model: Optional[str] = None,
     user=Depends(opt_user),
 ):
+    if hf_model: _set_hf_model(hf_model)
     data = await file.read()
     try:
         df = _read_file(data, file.filename)
@@ -733,6 +745,7 @@ async def ticket_upload(
     session_name: Optional[str] = None,
     user=Depends(opt_user),
 ):
+    if hf_model: _set_hf_model(hf_model)
     data = await file.read()
     try:
         df = _read_file(data, file.filename)
@@ -2494,12 +2507,19 @@ def ai_status():
     results["gemini"] = {"key_set": bool(gemini_key)}
     if gemini_key:
         try:
-            import google.generativeai as genai
-            genai.configure(api_key=gemini_key)
-            model = genai.GenerativeModel("gemini-1.5-flash")
-            r = model.generate_content("Say OK in one word")
-            results["gemini"]["status"] = "✅ WORKING"
-            results["gemini"]["response"] = r.text.strip()[:50]
+            import requests as _req
+            for gmodel in ["gemini-2.0-flash", "gemini-1.5-flash"]:
+                url = f"https://generativelanguage.googleapis.com/v1/models/{gmodel}:generateContent?key={gemini_key}"
+                r = _req.post(url, json={"contents": [{"parts": [{"text": "Say OK"}]}]}, timeout=10)
+                if r.status_code == 200:
+                    text = r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+                    results["gemini"]["status"] = f"✅ WORKING ({gmodel})"
+                    results["gemini"]["response"] = text[:50]
+                    break
+                elif r.status_code == 429:
+                    results["gemini"]["status"] = f"⚠️ QUOTA EXCEEDED ({gmodel}) — try later"
+                else:
+                    results["gemini"]["status"] = f"❌ {r.status_code}: {r.text[:80]}"
         except Exception as e:
             results["gemini"]["status"] = f"❌ FAILED: {str(e)[:100]}"
     else:

@@ -9,40 +9,32 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 GEMINI_API_KEY    = os.getenv("GEMINI_API_KEY", "")
 GROQ_API_KEY      = os.getenv("GROQ_API_KEY", "")   # FREE: groq.com — 14400 req/day, no credit card
 
-# ─── Gemini Caller (FREE) ────────────────────────────────────────
+# ─── Gemini Caller (via REST API — bypasses SDK version issues) ──
 def _call_gemini(prompt: str, max_tokens: int = 600) -> str | None:
     if not GEMINI_API_KEY:
         return None
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=GEMINI_API_KEY)
-        # Try models in order — free tier limits vary
-        gemini_models = ["gemini-1.5-flash", "gemini-2.0-flash-exp", "gemini-pro", "gemini-1.5-flash-latest"]
-        last_err = None
-        for model_name in gemini_models:
+        import requests
+        # Use REST API directly — not affected by SDK version
+        models = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
+        for model_name in models:
             try:
-                model = genai.GenerativeModel(model_name)
-                response = model.generate_content(
-                    prompt,
-                    generation_config=genai.types.GenerationConfig(
-                        max_output_tokens=max_tokens,
-                        temperature=0.7,
-                    )
-                )
-                if response.text:
-                    return response.text.strip()
-            except Exception as me:
-                last_err = str(me).lower()
-                if "quota" in last_err or "429" in last_err:
-                    continue  # Try next model
-                if "api_key" in last_err or "invalid" in last_err or "401" in last_err:
+                url = f"https://generativelanguage.googleapis.com/v1/models/{model_name}:generateContent?key={GEMINI_API_KEY}"
+                resp = requests.post(url, json={
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {"maxOutputTokens": max_tokens, "temperature": 0.7}
+                }, timeout=15)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+                elif resp.status_code in (429, 503):
+                    continue
+                elif resp.status_code in (400, 401, 403):
                     return "__INVALID_KEY__"
+            except Exception:
                 continue
         return None
-    except Exception as e:
-        err = str(e).lower()
-        if "api_key" in err or "invalid" in err or "401" in err:
-            return "__INVALID_KEY__"
+    except Exception:
         return None
 
 # ─── Anthropic Caller (optional paid backup) ─────────────────────

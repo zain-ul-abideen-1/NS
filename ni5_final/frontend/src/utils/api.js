@@ -10,8 +10,8 @@ export const Auth = {
 }
 export const Analyze = {
   text:    (text)        => axios.post('/api/analyze/text',    { text }),
-  batch:   (texts, name) => axios.post('/api/analyze/batch',   { texts, session_name: name }),
-  url:     (url, name)   => axios.post('/api/analyze/url',     { url, session_name: name }),
+  batch:   (texts, name, model) => axios.post('/api/analyze/batch',   { texts, session_name: name, hf_model: model || '' }),
+  url:     (url, name, model)   => axios.post('/api/analyze/url',     { url, session_name: name, hf_model: model || '' }),
   dataset: (form)        => axios.post('/api/analyze/dataset', form, { headers: { 'Content-Type': 'multipart/form-data' } }),
   columns: (form)        => axios.post('/api/detect/columns',  form, { headers: { 'Content-Type': 'multipart/form-data' } }),
 }

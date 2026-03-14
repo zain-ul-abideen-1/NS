@@ -28,10 +28,12 @@ HF_API_KEY  = os.getenv("HF_API_KEY", "")   # free at huggingface.co/settings/to
 HF_API_URL  = "https://router.huggingface.co/hf-inference/models/"
 
 # Primary model — RoBERTa, best for product/service reviews
-# Amazon product review models — in order of preference
-HF_SENTIMENT_MODEL  = "LiYuan/amazon-review-sentiment-analysis"
-HF_SENTIMENT_MODEL2 = "Eugenia/roberta-base-bne-finetuned-amazon_reviews_multi"
-HF_SENTIMENT_MODEL3 = "cardiffnlp/twitter-roberta-base-sentiment-latest"
+# Sentiment models — all confirmed working, tried in order
+HF_SENTIMENT_MODEL  = "siebert/sentiment-roberta-large-english"          # RoBERTa-large, highest accuracy
+HF_SENTIMENT_MODEL2 = "lxyuan/distilbert-base-multilingual-cased-sentiments-student"  # multilingual
+HF_SENTIMENT_MODEL3 = "nlptown/bert-base-multilingual-uncased-sentiment"  # 5-star ratings, product reviews
+HF_SENTIMENT_MODEL4 = "tabularisai/multilingual-sentiment-analysis"       # multilingual backup
+HF_SENTIMENT_MODEL5 = "cardiffnlp/twitter-roberta-base-sentiment-latest"  # final backup (fast, cached)
 
 _hf_cache = {}  # simple in-memory cache to avoid repeat API calls
 
@@ -49,7 +51,7 @@ def _hf_sentiment(text: str) -> dict | None:
 
     headers = {"Authorization": f"Bearer {HF_API_KEY}"}
 
-    for model in [HF_SENTIMENT_MODEL, HF_SENTIMENT_MODEL2, HF_SENTIMENT_MODEL3]:
+    for model in [HF_SENTIMENT_MODEL, HF_SENTIMENT_MODEL2, HF_SENTIMENT_MODEL3, HF_SENTIMENT_MODEL4, HF_SENTIMENT_MODEL5]:
         try:
             resp = requests.post(
                 HF_API_URL + model,
@@ -64,16 +66,22 @@ def _hf_sentiment(text: str) -> dict | None:
                     scores = data[0] if isinstance(data[0], list) else data
                     # Normalize labels to positive/negative/neutral
                     label_map = {
-                        "positive": "positive", "pos": "positive",
-                        "label_2": "positive", "label_1": "neutral",
-                        "label_0": "negative", "negative": "negative",
-                        "neg": "negative", "neutral": "neutral",
-                        "neu": "neutral",
+                        # Standard
+                        "positive": "positive", "pos": "positive", "neg": "negative",
+                        "negative": "negative", "neutral": "neutral", "neu": "neutral",
+                        # RoBERTa variants
+                        "label_0": "negative", "label_1": "neutral", "label_2": "positive",
                         "LABEL_0": "negative", "LABEL_1": "neutral", "LABEL_2": "positive",
-                        # LiYuan amazon model uses 1-5 stars
+                        # siebert model
+                        "POSITIVE": "positive", "NEGATIVE": "negative",
+                        # nlptown 5-star
                         "1 star": "negative", "2 stars": "negative",
                         "3 stars": "neutral",
                         "4 stars": "positive", "5 stars": "positive",
+                        # tabularisai
+                        "very positive": "positive", "very negative": "negative",
+                        # bertweet
+                        "POS": "positive", "NEG": "negative", "NEU": "neutral",
                     }
                     best = max(scores, key=lambda x: x["score"])
                     raw_label = best["label"].lower().strip()
@@ -570,4 +578,4 @@ def ticket_summary(results):
             "avg_urgency":round(avg_urg,3),"critical_count":crit,"high_count":high,"escalate_count":esc,
             "negative_count":sum(1 for r in results if r.get("sentiment")=="negative"),
             "critical_pct":round(crit/total*100,1),"escalate_pct":round(esc/total*100,1),
-            "top_category":top_cat,"needs_attention":crit+high} 
+            "top_category":top_cat,"needs_attention":crit+high}
