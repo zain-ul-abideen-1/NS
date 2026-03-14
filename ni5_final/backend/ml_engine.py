@@ -37,6 +37,88 @@ HF_SENTIMENT_MODEL5 = "cardiffnlp/twitter-roberta-base-sentiment-latest"  # fina
 
 _hf_cache = {}  # simple in-memory cache to avoid repeat API calls
 
+# ── NI Exclusive Model — Groq (Llama) powered sentiment ──────────────────────
+_groq_cache = {}
+
+def _groq_sentiment(text: str) -> dict | None:
+    """
+    NestInsights Exclusive Model — powered by Groq Llama.
+    Uses chain-of-thought reasoning for nuanced sentiment analysis.
+    Falls back to HF if GROQ_API_KEY not set.
+    """
+    groq_key = os.getenv("GROQ_API_KEY", "")
+    if not groq_key:
+        return None
+
+    cache_key = text[:300]
+    if cache_key in _groq_cache:
+        return _groq_cache[cache_key]
+
+    prompt = f"""Analyze the sentiment of this customer review. Think carefully about implicit tone, context, and what the reviewer is really saying.
+
+Review: "{text[:600]}"
+
+Respond with ONLY a JSON object in this exact format:
+{{"sentiment": "positive" | "negative" | "neutral", "positive_prob": 0.0-1.0, "negative_prob": 0.0-1.0, "neutral_prob": 0.0-1.0, "confidence": 0.0-1.0, "reasoning": "one sentence explaining why"}}
+
+Rules:
+- The three probs must sum to 1.0
+- Consider implicit negativity (complaints, sarcasm, comparisons that put something down)
+- Consider implicit positivity (satisfaction, recommendation, praise)
+- Be precise — mixed reviews should lean neutral unless one side is clearly dominant"""
+
+    try:
+        import requests as _req
+        resp = _req.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
+            json={
+                "model": "llama-3.1-8b-instant",
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 150,
+                "temperature": 0.1,  # low temp for consistent classification
+            },
+            timeout=10
+        )
+        if resp.status_code != 200:
+            return None
+
+        raw = resp.json()["choices"][0]["message"]["content"].strip()
+        # Strip markdown code blocks if present
+        raw = re.sub(r"```(?:json)?", "", raw).strip().strip("`").strip()
+        # Extract JSON
+        match = re.search(r'\{.*\}', raw, re.DOTALL)
+        if not match:
+            return None
+
+        data = json.loads(match.group())
+        sentiment = data.get("sentiment", "neutral").lower()
+        if sentiment not in ("positive", "negative", "neutral"):
+            sentiment = "neutral"
+
+        pos_p = float(data.get("positive_prob", 0.33))
+        neg_p = float(data.get("negative_prob", 0.33))
+        neu_p = float(data.get("neutral_prob", 0.34))
+
+        # Normalize to sum to 1
+        total = pos_p + neg_p + neu_p
+        if total > 0:
+            pos_p, neg_p, neu_p = pos_p/total, neg_p/total, neu_p/total
+
+        result = {
+            "sentiment":     sentiment,
+            "confidence":    float(data.get("confidence", 0.8)),
+            "positive_prob": round(pos_p, 4),
+            "negative_prob": round(neg_p, 4),
+            "neutral_prob":  round(neu_p, 4),
+            "model":         "ni_exclusive",
+        }
+        _groq_cache[cache_key] = result
+        return result
+
+    except Exception:
+        return None
+
 def _hf_sentiment(text: str, model_override: str = None) -> dict | None:
     """
     Call HuggingFace Inference API for sentiment.
@@ -428,9 +510,15 @@ def analyze_review(text: str, original_text: str = None) -> dict:
         return {}
     t = text.strip()
 
-    # Step 1: Try HuggingFace model — use the one selected by the user (HF_SENTIMENT_MODEL)
-    # HF_SENTIMENT_MODEL is set per-request by _set_hf_model() when user picks a model button
-    hf = _hf_sentiment(t, model_override=HF_SENTIMENT_MODEL)
+    # Step 1: Check if NI Exclusive model selected → use Groq
+    if HF_SENTIMENT_MODEL == "ni_exclusive":
+        hf = _groq_sentiment(t)
+        if not hf:
+            # Groq unavailable — fall back to best HF model
+            hf = _hf_sentiment(t, model_override="siebert/sentiment-roberta-large-english")
+    else:
+        # Use the HuggingFace model selected by user
+        hf = _hf_sentiment(t, model_override=HF_SENTIMENT_MODEL)
 
     if hf:
         sentiment    = hf["sentiment"]
