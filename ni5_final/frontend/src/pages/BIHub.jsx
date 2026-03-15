@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { TrendingUp, TrendingDown, DollarSign, BarChart2, Brain, RefreshCw,
          Target, AlertTriangle, CheckCircle, Award, Zap, Calendar,
-         Download, Globe, Users, Activity, FileText } from 'lucide-react'
-import { LineChart, Line, BarChart, Bar, AreaChart, Area, XAxis, YAxis,
-         Tooltip, ResponsiveContainer, CartesianGrid, Cell, Legend } from 'recharts'
+         Download, Globe, Users, Activity, FileText, GitCompare, Search, X } from 'lucide-react'
+import { LineChart, Line, BarChart, Bar, AreaChart, Area, RadarChart, Radar, PolarGrid, PolarAngleAxis,
+         XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell, Legend } from 'recharts'
 import axios from 'axios'
 import toast from 'react-hot-toast'
 import { TooltipBox } from '../components/UI'
@@ -14,6 +14,7 @@ const TABS = [
   { id:'forecast',    icon:TrendingUp,  label:'Forecasting'     },
   { id:'benchmark',   icon:Award,       label:'Benchmarking'    },
   { id:'report',      icon:FileText,    label:'Auto Report'     },
+  { id:'competitor',  icon:GitCompare,  label:'Competitor Analysis' },
 ]
 
 const KPI = ({ label, value, sub, color, icon: Icon }) => (
@@ -29,6 +30,11 @@ const KPI = ({ label, value, sub, color, icon: Icon }) => (
 
 export default function BIHub() {
   const [tab,        setTab]       = useState('overview')
+  const [competitor,  setCompetitor] = useState(null)
+  const [compLoading, setCompLoading] = useState(false)
+  const [allSessions, setAllSessions] = useState([])
+  const [selectedBrands, setSelectedBrands] = useState([])
+  const [brandSearch,  setBrandSearch]  = useState('')
   const [overview,   setOverview]  = useState(null)
   const [revenue,    setRevenue]   = useState(null)
   const [forecast,   setForecast]  = useState(null)
@@ -64,6 +70,9 @@ export default function BIHub() {
     if (tab === 'revenue'   && !revenue)   load('revenue',   '/api/bi/revenue-impact')
     if (tab === 'forecast'  && !forecast)  load('forecast',  '/api/bi/forecasting')
     if (tab === 'benchmark' && !benchmark) load('benchmark', '/api/bi/competitor-benchmark')
+    if (tab === 'competitor' && allSessions.length === 0) {
+      axios.get('/api/sessions').then(r => setAllSessions(r.data?.sessions || r.data || [])).catch(()=>{})
+    }
   }, [tab])
 
   const trendColor = t => t==='improving'?'var(--green)':t==='declining'?'var(--red)':'var(--brand)'
@@ -395,6 +404,233 @@ export default function BIHub() {
               )}
             </>
           ) : null}
+        </div>
+      )}
+
+
+      {/* ── COMPETITOR ANALYSIS ── */}
+      {tab === 'competitor' && (
+        <div className="space-y-5">
+
+          {/* Session picker */}
+          <div className="card p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="section-title">Competitor Analysis</p>
+                <p className="text-xs text-[var(--muted)] mt-0.5">Select 2–6 sessions representing different brands of the same product to compare head-to-head</p>
+              </div>
+              {selectedBrands.length >= 2 && (
+                <button
+                  onClick={async () => {
+                    setCompLoading(true); setCompetitor(null)
+                    try {
+                      const r = await axios.post('/api/bi/competitor-analysis', { session_ids: selectedBrands })
+                      setCompetitor(r.data)
+                    } catch { toast.error('Analysis failed') }
+                    setCompLoading(false)
+                  }}
+                  className="btn-primary text-xs flex items-center gap-1.5 flex-shrink-0"
+                >
+                  {compLoading ? <RefreshCw size={12} className="animate-spin"/> : <GitCompare size={12}/>}
+                  {compLoading ? 'Analyzing...' : 'Compare Brands'}
+                </button>
+              )}
+            </div>
+
+            {/* Search */}
+            <div className="relative">
+              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]"/>
+              <input
+                value={brandSearch} onChange={e => setBrandSearch(e.target.value)}
+                placeholder="Search sessions..."
+                className="input pl-8 text-xs w-full"
+              />
+            </div>
+
+            {/* Session list */}
+            <div className="grid grid-cols-1 gap-2 max-h-64 overflow-y-auto pr-1">
+              {allSessions
+                .filter(s => !brandSearch || s.name?.toLowerCase().includes(brandSearch.toLowerCase()))
+                .map(s => {
+                  const selected = selectedBrands.includes(s.session_id)
+                  return (
+                    <div
+                      key={s.session_id}
+                      onClick={() => {
+                        if (selected) setSelectedBrands(prev => prev.filter(id => id !== s.session_id))
+                        else if (selectedBrands.length < 6) setSelectedBrands(prev => [...prev, s.session_id])
+                        else toast.error('Max 6 brands')
+                      }}
+                      className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${
+                        selected
+                          ? 'border-[var(--brand)]/60 bg-[var(--brand)]/8'
+                          : 'border-[var(--border)] hover:border-[var(--border2)] bg-[var(--card2)]'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 ${selected ? 'border-[var(--brand)] bg-[var(--brand)]' : 'border-[var(--border)]'}`}>
+                          {selected && <CheckCircle size={10} className="text-white"/>}
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-[var(--text)] truncate max-w-[200px]">{s.name}</p>
+                          <p className="text-[10px] text-[var(--muted)]">{s.total_reviews} reviews · score {s.avg_score?.toFixed ? s.avg_score.toFixed(3) : s.avg_score}</p>
+                        </div>
+                      </div>
+                      {selected && <X size={12} className="text-[var(--muted)] flex-shrink-0"/>}
+                    </div>
+                  )
+                })}
+              {allSessions.length === 0 && (
+                <p className="text-xs text-[var(--muted)] text-center py-6">No sessions found. Analyze some URLs first.</p>
+              )}
+            </div>
+
+            {selectedBrands.length > 0 && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] text-[var(--muted)] font-medium uppercase tracking-wider">Selected:</span>
+                {allSessions.filter(s => selectedBrands.includes(s.session_id)).map(s => (
+                  <span key={s.session_id} className="text-[10px] px-2 py-1 rounded-lg bg-[var(--brand)]/15 text-[var(--brand)] font-medium">{s.name}</span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Loading */}
+          {compLoading && (
+            <div className="space-y-3">{[...Array(3)].map((_,i) => <div key={i} className="card h-20 animate-pulse bg-[var(--card2)]"/>)}</div>
+          )}
+
+          {/* Results */}
+          {competitor && !compLoading && (
+            <div className="space-y-5">
+
+              {/* Winner banner */}
+              {competitor.winner && (
+                <div className="card p-4 flex items-center gap-3 border border-[var(--green)]/40 bg-[var(--green)]/5">
+                  <Award size={18} className="text-[var(--green)] flex-shrink-0"/>
+                  <div>
+                    <p className="text-sm font-bold text-[var(--green)]">{competitor.winner} is winning</p>
+                    <p className="text-xs text-[var(--muted)] mt-0.5">Highest sentiment score among selected brands</p>
+                  </div>
+                </div>
+              )}
+
+              {/* AI Verdict */}
+              {competitor.verdict && (
+                <div className="card p-5 border border-[var(--brand)]/20 bg-[var(--brand)]/4">
+                  <p className="section-title flex items-center gap-2 mb-3"><Brain size={13} className="text-[var(--brand)]"/> AI Verdict</p>
+                  <p className="text-sm text-[var(--text)] leading-relaxed">{competitor.verdict}</p>
+                </div>
+              )}
+
+              {/* Score cards */}
+              <div className={`grid gap-4 ${competitor.brands?.length <= 3 ? 'grid-cols-' + competitor.brands.length : 'grid-cols-3'}`}>
+                {competitor.brands?.map((b, i) => (
+                  <div key={i} className={`card p-4 space-y-3 ${i === 0 ? 'border border-[var(--green)]/30' : ''}`}>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-bold text-[var(--text)] truncate">{b.name}</p>
+                      {i === 0 && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[var(--green)]/15 text-[var(--green)]">WINNER</span>}
+                    </div>
+                    <div className="text-2xl font-mono font-bold" style={{color: b.avg_score > 0 ? 'var(--green)' : 'var(--red)'}}>
+                      {b.avg_score > 0 ? '+' : ''}{b.avg_score}
+                    </div>
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-[10px]"><span className="text-[var(--green)]">Positive</span><span className="font-mono">{b.positive_pct}%</span></div>
+                      <div className="w-full bg-[var(--card2)] rounded-full h-1.5"><div className="bg-[var(--green)] h-1.5 rounded-full" style={{width: b.positive_pct + '%'}}/></div>
+                      <div className="flex justify-between text-[10px]"><span className="text-[var(--red)]">Negative</span><span className="font-mono">{b.negative_pct}%</span></div>
+                      <div className="w-full bg-[var(--card2)] rounded-full h-1.5"><div className="bg-[var(--red)] h-1.5 rounded-full" style={{width: b.negative_pct + '%'}}/></div>
+                    </div>
+                    <div className="flex justify-between text-[10px] text-[var(--muted)] pt-1 border-t border-[var(--border)]">
+                      <span>{b.total_reviews} reviews</span>
+                      <span style={{color: b.fake_pct > 15 ? 'var(--red)' : 'var(--muted)'}}>Fake: {b.fake_pct}%</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Radar — aspect comparison */}
+              {competitor.radar?.length > 0 && (
+                <div className="card p-5">
+                  <p className="section-title mb-4">Aspect Breakdown — Quality · Delivery · Price · Service</p>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <RadarChart data={competitor.radar}>
+                      <PolarGrid stroke="var(--border)"/>
+                      <PolarAngleAxis dataKey="aspect" tick={{fill:'var(--muted)',fontSize:11}}/>
+                      {competitor.brands?.map((b, i) => (
+                        <Radar key={i} name={b.name} dataKey={b.name.slice(0,20)}
+                          stroke={['var(--brand)','var(--green)','#f59e0b','#ef4444','#8b5cf6','#06b6d4'][i]}
+                          fill={['var(--brand)','var(--green)','#f59e0b','#ef4444','#8b5cf6','#06b6d4'][i]}
+                          fillOpacity={0.12}/>
+                      ))}
+                      <Legend wrapperStyle={{fontSize:11}}/>
+                      <Tooltip content={<TooltipBox/>}/>
+                    </RadarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+
+              {/* Bar comparison */}
+              <div className="card p-5">
+                <p className="section-title mb-4">Sentiment Score Comparison</p>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={competitor.brands} barSize={24}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false}/>
+                    <XAxis dataKey="name" tick={{fill:'var(--muted)',fontSize:10}} axisLine={false} tickLine={false}/>
+                    <YAxis tick={{fill:'var(--muted)',fontSize:10}} axisLine={false} tickLine={false}/>
+                    <Tooltip content={<TooltipBox/>}/>
+                    <Bar dataKey="positive_pct" name="Positive %" radius={[6,6,0,0]}>
+                      {competitor.brands?.map((_,i) => <Cell key={i} fill={['var(--brand)','var(--green)','#f59e0b','#ef4444','#8b5cf6','#06b6d4'][i]}/>)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Keyword overlap */}
+              {competitor.keyword_overlap?.length > 0 && (
+                <div className="card p-5">
+                  <p className="section-title mb-3">Shared Keywords Across Brands</p>
+                  <p className="text-xs text-[var(--muted)] mb-3">These topics appear in reviews for multiple brands — key battleground areas</p>
+                  <div className="flex flex-wrap gap-2">
+                    {competitor.keyword_overlap.map((kw, i) => (
+                      <span key={i} className="text-xs px-3 py-1.5 rounded-lg border border-[var(--brand)]/30 bg-[var(--brand)]/8 text-[var(--brand)] font-medium">{kw}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Full table */}
+              <div className="card p-5">
+                <p className="section-title mb-4">Full Brand Comparison</p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-[var(--border)]">
+                        {['Rank','Brand','Score','Positive','Negative','Neutral','Fake %','Reviews','Helpfulness'].map(h => (
+                          <th key={h} className="text-left text-[10px] text-[var(--muted)] font-semibold uppercase tracking-wider pb-2 pr-4 whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[var(--border)]">
+                      {competitor.brands?.map((b, i) => (
+                        <tr key={i} className={i === 0 ? 'bg-[var(--green)]/3' : ''}>
+                          <td className="py-2.5 pr-4 text-xs font-bold text-[var(--muted)]">#{i+1}</td>
+                          <td className="py-2.5 pr-4 text-xs font-semibold text-[var(--text)] max-w-[140px] truncate">{b.name}</td>
+                          <td className="py-2.5 pr-4 text-xs font-mono font-bold" style={{color: b.avg_score > 0 ? 'var(--green)' : 'var(--red)'}}>{b.avg_score > 0 ? '+' : ''}{b.avg_score}</td>
+                          <td className="py-2.5 pr-4 text-xs text-[var(--green)] font-medium">{b.positive_pct}%</td>
+                          <td className="py-2.5 pr-4 text-xs text-[var(--red)] font-medium">{b.negative_pct}%</td>
+                          <td className="py-2.5 pr-4 text-xs text-[var(--muted)]">{b.neutral_pct}%</td>
+                          <td className="py-2.5 pr-4 text-xs" style={{color: b.fake_pct > 15 ? 'var(--red)' : 'var(--muted)'}}>{b.fake_pct}%</td>
+                          <td className="py-2.5 pr-4 text-xs text-[var(--muted)]">{b.total_reviews}</td>
+                          <td className="py-2.5 text-xs text-[var(--muted)] font-mono">{b.avg_helpfulness}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+            </div>
+          )}
         </div>
       )}
 
