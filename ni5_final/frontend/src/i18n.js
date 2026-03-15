@@ -4,6 +4,7 @@ export const LANGS = [
   { code: 'ur', gtCode: 'ur', label: 'اردو', name: 'Urdu'   },
   { code: 'ar', gtCode: 'ar', label: 'عربي', name: 'Arabic' },
   { code: 'fr', gtCode: 'fr', label: 'FR',   name: 'French' },
+  { code: 'de', gtCode: 'de', label: 'DE',   name: 'Deutsch' },
 ]
 
 // ─── Hide Google Translate toolbar ────────────────────────────────────────
@@ -142,6 +143,12 @@ const T = {
     login: { title:'Bon retour', sub:'Connectez-vous à NestInsights', user:"Nom d'utilisateur", pass:'Mot de passe', btn:'Se connecter', noAcc:'Pas de compte ?', reg:"S'inscrire" },
     reg:   { title:'Créer un compte', sub:"Rejoignez-nous aujourd'hui", user:"Nom d'utilisateur", email:'E-mail', pass:'Mot de passe', btn:'Créer un compte', hasAcc:'Déjà un compte ?', login:'Se connecter' },
     common: { analyze:'Analyser', upload:'Télécharger', loading:'Chargement…', export:'Exporter CSV', delete:'Supprimer', cancel:'Annuler', save:'Sauvegarder', search:'Rechercher', back:'Retour', total:'Total', positive:'Positif', negative:'Négatif', neutral:'Neutre' },
+  },
+  de: {
+    nav: { dashboard:'Dashboard', analyze:'Analysieren', text:'Einzeltext', history:'Verlauf', compare:'Vergleich', trends:'Trends', tickets:'Support-Tickets', verify:'Hash-Prüfung', watchlist:'Watchlist', profile:'Profil' },
+    login: { title:'Willkommen zurück', sub:'Bei NestInsights anmelden', user:'Benutzername', pass:'Passwort', btn:'Anmelden', noAcc:'Noch kein Konto?', reg:'Registrieren' },
+    reg:   { title:'Konto erstellen', sub:'Heute beitreten', user:'Benutzername', email:'E-Mail', pass:'Passwort', btn:'Konto erstellen', hasAcc:'Bereits ein Konto?', login:'Anmelden' },
+    common: { analyze:'Analysieren', upload:'Hochladen', loading:'Laden…', export:'CSV exportieren', delete:'Löschen', cancel:'Abbrechen', save:'Speichern', search:'Suchen', back:'Zurück', total:'Gesamt', positive:'Positiv', negative:'Negativ', neutral:'Neutral' },
   },
 }
 

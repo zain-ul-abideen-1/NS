@@ -749,6 +749,7 @@ async def ticket_upload(
     session_name: Optional[str] = None,
     user=Depends(opt_user),
 ):
+    if hf_model: _set_hf_model(hf_model)
     data = await file.read()
     try:
         df = _read_file(data, file.filename)
@@ -1712,6 +1713,121 @@ def bi_competitor_benchmark(user=Depends(opt_user)):
         f"Average sentiment across all sessions: {round(sum(s['score'] for s in sessions)/len(sessions),3)}"
     ]
     return {"sessions": sessions[:10], "winner": winner["name"], "insights": insights}
+
+
+# ── Competitor Analysis ────────────────────────────────────────────────────
+@app.post("/api/bi/competitor-analysis")
+def bi_competitor_analysis(req: CompareReq, user=Depends(opt_user)):
+    """
+    Deep competitor analysis across selected sessions (different brands, same product).
+    Returns head-to-head metrics, keyword overlap, aspect comparison, and AI verdict.
+    """
+    conn = get_conn()
+    uid = user["id"] if user else None
+    results = []
+
+    for sid in req.session_ids[:6]:
+        q = "SELECT * FROM sessions WHERE session_id=?"
+        params = [sid]
+        if uid and user.get("role") != "admin":
+            q += " AND user_id=?"
+            params.append(uid)
+        row = conn.execute(q, params).fetchone()
+        if not row:
+            continue
+        s = dict(row)
+
+        # Pull reviews for keyword + aspect breakdown
+        reviews = conn.execute(
+            "SELECT sentiment, score, keywords, aspects FROM reviews WHERE session_id=?", (sid,)
+        ).fetchall()
+
+        # Keyword frequency
+        kw_freq = {}
+        aspect_totals = {"delivery": 0, "quality": 0, "price": 0, "service": 0}
+        for r in reviews:
+            try:
+                for kw in json.loads(r["keywords"] or "[]"):
+                    kw_freq[kw] = kw_freq.get(kw, 0) + 1
+            except Exception:
+                pass
+            try:
+                aspects = json.loads(r["aspects"] or "{}")
+                for k in aspect_totals:
+                    if aspects.get(k):
+                        aspect_totals[k] += 1
+            except Exception:
+                pass
+
+        total = max(s.get("total_reviews", 1), 1)
+        top_keywords = sorted(kw_freq.items(), key=lambda x: x[1], reverse=True)[:10]
+
+        results.append({
+            "session_id":    sid,
+            "name":          s.get("name", sid),
+            "total_reviews": total,
+            "avg_score":     round(s.get("avg_score", 0), 3),
+            "positive_pct":  round(s.get("positive_count", 0) / total * 100, 1),
+            "negative_pct":  round(s.get("negative_count", 0) / total * 100, 1),
+            "neutral_pct":   round(s.get("neutral_count", 0) / total * 100, 1),
+            "fake_pct":      round(s.get("fake_count", 0) / total * 100, 1),
+            "avg_helpfulness": round(s.get("avg_helpfulness", 0), 3),
+            "top_keywords":  [k for k, _ in top_keywords],
+            "aspects":       {k: round(v / total * 100, 1) for k, v in aspect_totals.items()},
+            "source_url":    s.get("source_url", ""),
+        })
+
+    conn.close()
+
+    if not results:
+        return {"brands": [], "winner": None, "radar": [], "keyword_overlap": [], "verdict": ""}
+
+    # Sort by avg_score descending
+    results.sort(key=lambda x: x["avg_score"], reverse=True)
+    winner = results[0]
+
+    # Keyword overlap — keywords appearing in 2+ brands
+    all_kw_sets = [set(r["top_keywords"]) for r in results]
+    overlap = set()
+    for i in range(len(all_kw_sets)):
+        for j in range(i+1, len(all_kw_sets)):
+            overlap |= all_kw_sets[i] & all_kw_sets[j]
+    keyword_overlap = list(overlap)[:12]
+
+    # Radar data — one entry per aspect per brand
+    radar = []
+    for asp in ["quality", "delivery", "price", "service"]:
+        entry = {"aspect": asp.capitalize()}
+        for r in results:
+            entry[r["name"][:20]] = r["aspects"].get(asp, 0)
+        radar.append(entry)
+
+    # AI verdict
+    summary_lines = [
+        f"Brand: {r['name']} | Score: {r['avg_score']} | Positive: {r['positive_pct']}% | Negative: {r['negative_pct']}% | Reviews: {r['total_reviews']} | Top keywords: {', '.join(r['top_keywords'][:5])}"
+        for r in results
+    ]
+    prompt = (
+        f"You are a business analyst. Compare these {len(results)} brands based on customer review data:\n\n"
+        + "\n".join(summary_lines)
+        + "\n\nWrite a concise 3-sentence verdict: which brand is winning and why, what the weakest brand needs to fix, and one key insight from the keyword overlap."
+    )
+    from ai_module import _call_ai
+    verdict = _call_ai(prompt, max_tokens=200)
+    if not verdict or verdict == "__INVALID_KEY__":
+        verdict = (
+            f"'{winner['name']}' leads with a sentiment score of {winner['avg_score']} and {winner['positive_pct']}% positive reviews. "
+            f"{'The gap between brands suggests significant differences in customer satisfaction.' if len(results)>1 else ''} "
+            f"Shared keywords {keyword_overlap[:3]} indicate common customer discussion topics across brands."
+        )
+
+    return {
+        "brands":           results,
+        "winner":           winner["name"],
+        "radar":            radar,
+        "keyword_overlap":  keyword_overlap,
+        "verdict":          verdict,
+    }
 
 @app.post("/api/bi/auto-report")
 def bi_auto_report(user=Depends(opt_user)):

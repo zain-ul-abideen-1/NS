@@ -231,7 +231,7 @@ export default function Layout() {
             <Menu size={20} />
           </button>
           <p className="font-display font-bold text-sm text-[var(--text)]">
-            NestInsights <span className="text-[var(--muted)] text-xs">v5</span>
+            NestInsights <span className="text-[var(--muted)] text-xs">v8</span>
           </p>
           <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="text-[var(--muted)] p-1">
             {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
