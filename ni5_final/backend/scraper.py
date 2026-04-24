@@ -1,13 +1,13 @@
 """
 NestInsights v5.0 — Web Scraper
-Uses scrape.do API (handles JS rendering, CAPTCHAs, rotating proxies)
-Token: set SCRAPE_DO_TOKEN in backend/.env
+Uses ScrapingBee API (handles JS rendering, CAPTCHAs, rotating proxies)
+Token: set SCRAPING_BEE_KEY in backend/.env
 """
 import re, time, random, os, json
 import requests
 from bs4 import BeautifulSoup
 
-SCRAPE_DO_TOKEN = os.getenv("SCRAPE_DO_TOKEN", "")
+SCRAPING_BEE_KEY = os.getenv("SCRAPING_BEE_KEY", "")
 
 HEADERS_POOL = [
     {
@@ -69,45 +69,49 @@ def _fetch_direct(url, timeout=20):
     return None, "max_retries"
 
 
-def _fetch_via_scrape_do(url, render_js=False):
+def _fetch_via_scrapingbee(url, render_js=False):
     """
-    scrape.do API — endpoint: https://api.scrape.do/
+    ScrapingBee API — endpoint: https://app.scrapingbee.com/api/v1/
     Params: token, url, render (optional)
     """
-    if not SCRAPE_DO_TOKEN:
+    if not SCRAPING_BEE_KEY:
         return None, "no_token"
-    params = {"token": SCRAPE_DO_TOKEN, "url": url}
+    params = {
+        "api_key":         SCRAPING_BEE_KEY,
+        "url":             url,
+        "render_js":       "true" if render_js else "false",
+        "premium_proxy":   "true",
+        "block_ads":       "true",
+        "block_resources": "true",
+    }
     if render_js:
         params["render"] = "true"
     try:
-        r = requests.get("https://api.scrape.do/", params=params, timeout=60)
+        r = requests.get("https://app.scrapingbee.com/api/v1/", params=params, timeout=60)
         if r.status_code == 200:
             html = r.text
             if any(b in html.lower() for b in BLOCKED_INDICATORS) and not render_js:
-                return _fetch_via_scrape_do(url, render_js=True)
+                return _fetch_via_scrapingbee(url, render_js=True)
             return html, None
         elif r.status_code == 401:
             return None, "invalid_token"
         elif r.status_code == 429:
             return None, "quota_exceeded"
         else:
-            return None, f"scrape_do_http_{r.status_code}"
+            return None, f"scrapingbee_http_{r.status_code}"
     except Exception as e:
-        return None, f"scrape_do_error: {str(e)[:60]}"
+        return None, f"scrapingbee_error: {str(e)[:60]}"
 
 
 def _fetch_best(url):
     html, err = _fetch_direct(url)
     if html:
         return html, "direct"
-    if SCRAPE_DO_TOKEN:
-        html2, err2 = _fetch_via_scrape_do(url, render_js=False)
+    if SCRAPING_BEE_KEY:
+        html2, err2 = _fetch_via_scrapingbee(url, render_js=True)
         if html2:
-            return html2, "scrape.do"
-        html3, err3 = _fetch_via_scrape_do(url, render_js=True)
-        if html3:
-            return html3, "scrape.do+js"
-        return None, f"all_failed | direct:{err} | scrape.do:{err2} | js:{err3}"
+            return html2, "scrapingbee"
+        return None, f"all_failed | direct:{err} | scrapingbee:{err2}"
     return None, f"direct_failed:{err}"
 
 
@@ -237,13 +241,13 @@ def scrape_reviews(url: str) -> dict:
     html, method = _fetch_best(url)
 
     if not html:
-        if SCRAPE_DO_TOKEN:
+        if SCRAPING_BEE_KEY:
             msg = (f"Could not retrieve page from {domain}. "
-                   f"The site may use protection that scrape.do cannot bypass. "
+                   f"The site may use protection that ScrapingBee cannot bypass. "
                    f"Try exporting reviews as CSV and using Dataset Upload.")
         else:
             msg = (f"Could not retrieve page from {domain}. "
-                   f"Add SCRAPE_DO_TOKEN to backend/.env to enable scraping protected sites.")
+                   f"Add SCRAPING_BEE_KEY to backend/.env to enable scraping protected sites.")
         return {"scraped": False, "reviews": [], "count": 0, "error": "fetch_failed", "message": msg, "method": method}
 
     soup = BeautifulSoup(html, "lxml")
