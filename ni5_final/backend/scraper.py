@@ -1,42 +1,29 @@
 """
-Nest Insights v5.0 — Web Scraper
-Uses ScrapingBee API (handles JS rendering, CAPTCHAs, rotating proxies)
-Token: set SCRAPING_BEE_KEY in backend/.env
+NestInsights v5.0 — Web Scraper
+Multi-method scraping with 4 fallback layers:
+1. Direct HTTP (fastest, free)
+2. ScrapingBee with JS rendering (paid, handles most sites)
+3. Zenrows free tier (backup scraper)
+4. Google Cache / Search snippets (last resort)
 """
-import re, time, random, os, json
+import re, time, random, os, json, hashlib
 import requests
 from bs4 import BeautifulSoup
+from urllib.parse import urlencode, quote_plus
 
-SCRAPING_BEE_KEY = os.getenv("SCRAPING_BEE_KEY", "")
+WEBSCRAPING_AI_KEY = os.getenv("WEBSCRAPING_AI_KEY", "")
+ZENROWS_KEY      = os.getenv("ZENROWS_KEY", "")       # free: 1000 credits/mo at zenrows.com
 
 HEADERS_POOL = [
-    {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Connection": "keep-alive",
-    },
-    {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Safari/605.1.15",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-GB,en;q=0.9",
-    },
-    {
-        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:125.0) Gecko/20100101 Firefox/125.0",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
-    },
+    {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36","Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8","Accept-Language": "en-US,en;q=0.9","Accept-Encoding": "gzip, deflate, br","Connection": "keep-alive"},
+    {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Safari/605.1.15","Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8","Accept-Language": "en-GB,en;q=0.9"},
+    {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:125.0) Gecko/20100101 Firefox/125.0","Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8","Accept-Language": "en-US,en;q=0.5"},
 ]
 
-BLOCKED_INDICATORS = [
-    "access denied", "robot check", "automated access",
-    "cloudflare", "please verify you are a human",
-    "enable javascript and cookies", "just a moment",
-    "checking your browser", "ddos protection", "security check",
-]
+BLOCKED_INDICATORS = ["access denied","robot check","automated access","cloudflare","please verify you are a human","enable javascript and cookies","just a moment","checking your browser","ddos protection","security check"]
 
 
+# ── METHOD 1: Direct HTTP ──────────────────────────────────────────────────────
 def _fetch_direct(url, timeout=20):
     for attempt in range(3):
         try:
@@ -60,8 +47,6 @@ def _fetch_direct(url, timeout=20):
                 time.sleep(10)
             else:
                 return None, f"http_{r.status_code}"
-        except requests.exceptions.ConnectionError:
-            return None, "connection_error"
         except requests.exceptions.Timeout:
             return None, "timeout"
         except Exception as e:
@@ -69,54 +54,152 @@ def _fetch_direct(url, timeout=20):
     return None, "max_retries"
 
 
-def _fetch_via_scrapingbee(url, render_js=False):
-    """
-    ScrapingBee API — endpoint: https://app.scrapingbee.com/api/v1/
-    Params: token, url, render (optional)
-    """
-    if not SCRAPING_BEE_KEY:
-        return None, "no_token"
+# ── METHOD 2: WebScraping.AI ──────────────────────────────────────────────────
+def _fetch_via_webscrapingai(url, render_js=True):
+    if not WEBSCRAPING_AI_KEY:
+        return None, "no_key"
     params = {
-        "api_key":         SCRAPING_BEE_KEY,
-        "url":             url,
-        "render_js":       "true" if render_js else "false",
-        "premium_proxy":   "true",
-        "block_ads":       "true",
-        "block_resources": "true",
+        "api_key":  WEBSCRAPING_AI_KEY,
+        "url":      url,
+        "js":       "true" if render_js else "false",
+        "proxy":    "datacenter",
     }
-    if render_js:
-        params["render"] = "true"
     try:
-        r = requests.get("https://app.scrapingbee.com/api/v1/", params=params, timeout=60)
-        if r.status_code == 200:
-            html = r.text
-            if any(b in html.lower() for b in BLOCKED_INDICATORS) and not render_js:
-                return _fetch_via_scrapingbee(url, render_js=True)
-            return html, None
+        r = requests.get("https://api.webscraping.ai/html", params=params, timeout=60)
+        if r.status_code == 200 and len(r.text) > 200:
+            if any(b in r.text.lower() for b in BLOCKED_INDICATORS):
+                return None, "still_blocked"
+            return r.text, None
         elif r.status_code == 401:
-            return None, "invalid_token"
+            return None, "invalid_key"
         elif r.status_code == 429:
             return None, "quota_exceeded"
         else:
-            return None, f"scrapingbee_http_{r.status_code}"
+            return None, f"webscrapingai_{r.status_code}"
     except Exception as e:
-        return None, f"scrapingbee_error: {str(e)[:60]}"
+        return None, f"webscrapingai_error:{str(e)[:50]}"
 
 
+# ── METHOD 3: ZenRows (free 1000 credits/mo) ──────────────────────────────────
+def _fetch_via_zenrows(url):
+    if not ZENROWS_KEY:
+        return None, "no_key"
+    params = {
+        "apikey":      ZENROWS_KEY,
+        "url":         url,
+        "js_render":   "true",
+        "premium_proxy":"true",
+    }
+    try:
+        r = requests.get("https://api.zenrows.com/v1/", params=params, timeout=60)
+        if r.status_code == 200 and len(r.text) > 200:
+            return r.text, None
+        return None, f"zenrows_{r.status_code}"
+    except Exception as e:
+        return None, f"zenrows_error:{str(e)[:50]}"
+
+
+# ── METHOD 4: Google Cache ────────────────────────────────────────────────────
+def _fetch_google_cache(url):
+    """Try Google's cached version of the page — often bypasses bot protection."""
+    cache_url = f"https://webcache.googleusercontent.com/search?q=cache:{quote_plus(url)}&hl=en"
+    try:
+        s = requests.Session()
+        s.headers.update(random.choice(HEADERS_POOL))
+        r = s.get(cache_url, timeout=20, allow_redirects=True)
+        if r.status_code == 200 and len(r.text) > 500:
+            if "did not match any documents" not in r.text.lower():
+                return r.text, None
+        return None, f"cache_{r.status_code}"
+    except Exception as e:
+        return None, f"cache_error:{str(e)[:50]}"
+
+
+# ── METHOD 5: Trustpilot API (official) ───────────────────────────────────────
+def _fetch_trustpilot_api(url):
+    """
+    Trustpilot has an unofficial JSON endpoint that sometimes works.
+    Extract business unit from URL and call their API directly.
+    """
+    match = re.search(r'trustpilot\.com/review/([^/?#]+)', url)
+    if not match:
+        return []
+    domain = match.group(1)
+    reviews = []
+    try:
+        # Try the Trustpilot consumer API
+        api_url = f"https://www.trustpilot.com/api/categoriespages/search/reviews?businessUnitId={domain}&perPage=20"
+        r = requests.get(api_url, headers={"Accept": "application/json", **random.choice(HEADERS_POOL)}, timeout=15)
+        if r.status_code == 200:
+            data = r.json()
+            for rv in data.get("reviews", []):
+                text = rv.get("text", "")
+                if len(text) > 15:
+                    reviews.append({"text": text, "author": rv.get("consumer", {}).get("displayName", ""), "rating": rv.get("rating", 0), "date": rv.get("createdAt", "")})
+    except Exception:
+        pass
+
+    if not reviews:
+        try:
+            # Alternate: business unit lookup then reviews
+            lookup = requests.get(
+                f"https://www.trustpilot.com/api/categoriespages/find-business-unit/search?query={domain}",
+                headers=random.choice(HEADERS_POOL), timeout=15
+            )
+            if lookup.status_code == 200:
+                buid = lookup.json().get("businessUnits", [{}])[0].get("id", "")
+                if buid:
+                    rev_r = requests.get(
+                        f"https://www.trustpilot.com/api/categoriespages/{buid}/reviews?perPage=20",
+                        headers=random.choice(HEADERS_POOL), timeout=15
+                    )
+                    if rev_r.status_code == 200:
+                        for rv in rev_r.json().get("reviews", []):
+                            text = rv.get("text", "")
+                            if len(text) > 15:
+                                reviews.append({"text": text, "author": "", "rating": rv.get("rating", 0), "date": ""})
+        except Exception:
+            pass
+
+    return reviews
+
+
+# ── MASTER FETCH — tries all methods in order ─────────────────────────────────
 def _fetch_best(url):
+    domain = re.sub(r'^https?://(www\.)?', '', url).split('/')[0].lower()
+
+    # Trustpilot — try API first before any scraping
+    if "trustpilot.com" in domain:
+        tp_reviews = _fetch_trustpilot_api(url)
+        if tp_reviews:
+            return None, "trustpilot_api", tp_reviews
+
+    # Method 1: Direct
     html, err = _fetch_direct(url)
     if html:
-        return html, "direct"
-    if SCRAPING_BEE_KEY:
-        html2, err2 = _fetch_via_scrapingbee(url, render_js=True)
-        if html2:
-            return html2, "scrapingbee"
-        return None, f"all_failed | direct:{err} | scrapingbee:{err2}"
-    return None, f"direct_failed:{err}"
+        return html, "direct", None
+
+    # Method 2: ScrapingBee
+    if WEBSCRAPING_AI_KEY:
+        html, err2 = _fetch_via_webscrapingai(url, render_js=True)
+        if html:
+            return html, "webscrapingai", None
+
+    # Method 3: ZenRows
+    if ZENROWS_KEY:
+        html, err3 = _fetch_via_zenrows(url)
+        if html:
+            return html, "zenrows", None
+
+    # Method 4: Google Cache
+    html, err4 = _fetch_google_cache(url)
+    if html:
+        return html, "google_cache", None
+
+    return None, "all_failed", None
 
 
 # ── Parsers ────────────────────────────────────────────────────────────────────
-
 def _parse_json_ld(soup):
     reviews = []
     for script in soup.find_all("script", type="application/ld+json"):
@@ -133,22 +216,12 @@ def _parse_json_ld(soup):
                         body = rv.get("reviewBody") or rv.get("description") or ""
                         if len(body.strip()) > 10:
                             author = rv.get("author", {})
-                            reviews.append({
-                                "text":   body.strip(),
-                                "author": author.get("name","") if isinstance(author, dict) else str(author),
-                                "rating": float((rv.get("reviewRating") or {}).get("ratingValue") or 0),
-                                "date":   rv.get("datePublished",""),
-                            })
+                            reviews.append({"text": body.strip(), "author": author.get("name","") if isinstance(author, dict) else str(author), "rating": float((rv.get("reviewRating") or {}).get("ratingValue") or 0), "date": rv.get("datePublished","")})
                 elif rtype == "Review":
                     body = item.get("reviewBody") or item.get("description") or ""
                     if len(body.strip()) > 10:
                         author = item.get("author") or {}
-                        reviews.append({
-                            "text":   body.strip(),
-                            "author": author.get("name","") if isinstance(author, dict) else "",
-                            "rating": float((item.get("reviewRating") or {}).get("ratingValue") or 0),
-                            "date":   item.get("datePublished",""),
-                        })
+                        reviews.append({"text": body.strip(), "author": author.get("name","") if isinstance(author, dict) else "", "rating": float((item.get("reviewRating") or {}).get("ratingValue") or 0), "date": item.get("datePublished","")})
         except Exception:
             continue
     return reviews
@@ -156,8 +229,11 @@ def _parse_json_ld(soup):
 
 def _parse_trustpilot(soup):
     reviews = []
-    for tag, cls in [("article", {"data-service-review-card-paper": True}),
-                     ("div", re.compile(r"styles_reviewCard|ReviewCard", re.I))]:
+    for tag, cls in [
+        ("article", {"data-service-review-card-paper": True}),
+        ("div", re.compile(r"styles_reviewCard|ReviewCard", re.I)),
+        ("div", re.compile(r"review-card|reviewCard", re.I)),
+    ]:
         cards = soup.find_all(tag, class_=cls) if isinstance(cls, re.Pattern) else soup.find_all(tag, attrs=cls)
         for card in cards:
             el = (card.find("p", {"data-service-review-text-typography": True}) or
@@ -184,6 +260,15 @@ def _parse_amazon(soup):
 def _parse_yelp(soup):
     reviews = []
     for el in soup.find_all("p", class_=re.compile(r"comment|review.*text", re.I)):
+        t = el.get_text(separator=" ", strip=True)
+        if len(t) > 20:
+            reviews.append({"text": t, "author": "", "rating": 0, "date": ""})
+    return reviews
+
+
+def _parse_google_maps(soup):
+    reviews = []
+    for el in soup.find_all(["span","div"], class_=re.compile(r"wiI7pd|review-full-text|review-snippet", re.I)):
         t = el.get_text(separator=" ", strip=True)
         if len(t) > 20:
             reviews.append({"text": t, "author": "", "rating": 0, "date": ""})
@@ -232,23 +317,29 @@ def _parse_generic(soup):
     return reviews[:300]
 
 
+# ── MAIN ENTRY ────────────────────────────────────────────────────────────────
 def scrape_reviews(url: str) -> dict:
     url = url.strip()
     if not url.startswith("http"):
         url = "https://" + url
     domain = re.sub(r'^https?://(www\.)?', '', url).split('/')[0].lower()
 
-    html, method = _fetch_best(url)
+    html, method, prefetched_reviews = _fetch_best(url)
+
+    # Trustpilot API returned reviews directly
+    if prefetched_reviews:
+        cleaned = [{"text": re.sub(r'\s+', ' ', rv["text"].strip()), **{k:v for k,v in rv.items() if k != "text"}} for rv in prefetched_reviews if len(rv.get("text","").strip()) > 15]
+        return {"scraped": True, "reviews": cleaned[:300], "count": len(cleaned[:300]), "error": None, "message": f"Fetched {len(cleaned[:300])} reviews from Trustpilot API", "method": "trustpilot_api"}
 
     if not html:
-        if SCRAPING_BEE_KEY:
-            msg = (f"Could not retrieve page from {domain}. "
-                   f"The site may use protection that ScrapingBee cannot bypass. "
-                   f"Try exporting reviews as CSV and using Dataset Upload.")
-        else:
-            msg = (f"Could not retrieve page from {domain}. "
-                   f"Add SCRAPING_BEE_KEY to backend/.env to enable scraping protected sites.")
-        return {"scraped": False, "reviews": [], "count": 0, "error": "fetch_failed", "message": msg, "method": method}
+        return {
+            "scraped": False, "reviews": [], "count": 0,
+            "error": "fetch_failed",
+            "message": (f"Could not retrieve page from {domain} after trying all methods. "
+                        f"The site has strong bot protection. "
+                        f"Try exporting reviews as CSV and using Dataset Upload instead."),
+            "method": method
+        }
 
     soup = BeautifulSoup(html, "lxml")
     for el in soup(["script","style","nav","header","footer","aside","noscript","iframe"]):
@@ -261,6 +352,8 @@ def scrape_reviews(url: str) -> dict:
         reviews = _parse_amazon(soup)
     elif "yelp.com" in domain:
         reviews = _parse_yelp(soup)
+    elif "google.com/maps" in url or "maps.google" in url:
+        reviews = _parse_google_maps(soup)
 
     if not reviews:
         reviews = _parse_json_ld(soup)
@@ -272,14 +365,12 @@ def scrape_reviews(url: str) -> dict:
             "scraped": False, "reviews": [], "count": 0,
             "error": "no_reviews_found",
             "message": (f"Page loaded from {domain} but no review text detected. "
-                        f"The site likely loads reviews via JavaScript. "
-                        f"Try enabling JS rendering or export reviews as CSV."),
+                        f"The site likely loads reviews via JavaScript after the page loads. "
+                        f"Try exporting reviews as CSV and uploading instead."),
             "method": method,
         }
 
-    cleaned = [{"text": re.sub(r'\s+', ' ', rv["text"].strip()), **{k:v for k,v in rv.items() if k!="text"}}
-               for rv in reviews if len(rv.get("text","").strip()) > 15]
-
+    cleaned = [{"text": re.sub(r'\s+', ' ', rv["text"].strip()), **{k:v for k,v in rv.items() if k != "text"}} for rv in reviews if len(rv.get("text","").strip()) > 15]
     via = f" via {method}" if method != "direct" else ""
     return {
         "scraped": True,
