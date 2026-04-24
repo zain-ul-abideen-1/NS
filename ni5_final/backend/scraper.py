@@ -1,5 +1,5 @@
 """
-NestInsights v5.0 — Web Scraper
+Nest Insights v5.0 — Web Scraper
 Uses ScrapingBee API (handles JS rendering, CAPTCHAs, rotating proxies)
 Token: set SCRAPING_BEE_KEY in backend/.env
 """
