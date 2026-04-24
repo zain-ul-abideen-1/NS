@@ -71,7 +71,7 @@ def _fetch_direct(url, timeout=20):
 
 def _fetch_via_scrape_do(url, render_js=False):
     """
-    scrape.do API — endpoint: http://api.scrape.do/
+    scrape.do API — endpoint: https://api.scrape.do/
     Params: token, url, render (optional)
     """
     if not SCRAPE_DO_TOKEN:
@@ -80,7 +80,7 @@ def _fetch_via_scrape_do(url, render_js=False):
     if render_js:
         params["render"] = "true"
     try:
-        r = requests.get("http://api.scrape.do/", params=params, timeout=60)
+        r = requests.get("https://api.scrape.do/", params=params, timeout=60)
         if r.status_code == 200:
             html = r.text
             if any(b in html.lower() for b in BLOCKED_INDICATORS) and not render_js:
