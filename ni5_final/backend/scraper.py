@@ -117,50 +117,56 @@ def _fetch_google_cache(url):
 
 # ── METHOD 5: Trustpilot API (official) ───────────────────────────────────────
 def _fetch_trustpilot_api(url):
-    """
-    Trustpilot has an unofficial JSON endpoint that sometimes works.
-    Extract business unit from URL and call their API directly.
-    """
+    """Trustpilot unofficial API — fetches up to 300 reviews across multiple pages."""
     match = re.search(r'trustpilot\.com/review/([^/?#]+)', url)
     if not match:
         return []
     domain = match.group(1)
     reviews = []
+
+    # Get business unit id first
+    buid = None
     try:
-        # Try the Trustpilot consumer API
-        api_url = f"https://www.trustpilot.com/api/categoriespages/search/reviews?businessUnitId={domain}&perPage=20"
-        r = requests.get(api_url, headers={"Accept": "application/json", **random.choice(HEADERS_POOL)}, timeout=15)
-        if r.status_code == 200:
-            data = r.json()
-            for rv in data.get("reviews", []):
-                text = rv.get("text", "")
-                if len(text) > 15:
-                    reviews.append({"text": text, "author": rv.get("consumer", {}).get("displayName", ""), "rating": rv.get("rating", 0), "date": rv.get("createdAt", "")})
+        lookup = requests.get(
+            f"https://www.trustpilot.com/api/categoriespages/find-business-unit/search?query={domain}",
+            headers={**random.choice(HEADERS_POOL), "Accept": "application/json"}, timeout=15
+        )
+        if lookup.status_code == 200:
+            units = lookup.json().get("businessUnits", [])
+            if units:
+                buid = units[0].get("id", "")
     except Exception:
         pass
 
-    if not reviews:
+    # Paginate through reviews
+    per_page = 20
+    max_pages = 15  # up to 300 reviews
+    for page in range(1, max_pages + 1):
         try:
-            # Alternate: business unit lookup then reviews
-            lookup = requests.get(
-                f"https://www.trustpilot.com/api/categoriespages/find-business-unit/search?query={domain}",
-                headers=random.choice(HEADERS_POOL), timeout=15
-            )
-            if lookup.status_code == 200:
-                buid = lookup.json().get("businessUnits", [{}])[0].get("id", "")
-                if buid:
-                    rev_r = requests.get(
-                        f"https://www.trustpilot.com/api/categoriespages/{buid}/reviews?perPage=20",
-                        headers=random.choice(HEADERS_POOL), timeout=15
-                    )
-                    if rev_r.status_code == 200:
-                        for rv in rev_r.json().get("reviews", []):
-                            text = rv.get("text", "")
-                            if len(text) > 15:
-                                reviews.append({"text": text, "author": "", "rating": rv.get("rating", 0), "date": ""})
+            if buid:
+                api_url = f"https://www.trustpilot.com/api/categoriespages/{buid}/reviews?perPage={per_page}&page={page}"
+            else:
+                api_url = f"https://www.trustpilot.com/api/categoriespages/search/reviews?businessUnitId={domain}&perPage={per_page}&page={page}"
+            r = requests.get(api_url, headers={**random.choice(HEADERS_POOL), "Accept": "application/json"}, timeout=15)
+            if r.status_code != 200:
+                break
+            data = r.json()
+            page_reviews = data.get("reviews", [])
+            if not page_reviews:
+                break
+            for rv in page_reviews:
+                text = rv.get("text", "") or rv.get("title", "")
+                if len(text) > 15:
+                    reviews.append({"text": text, "author": rv.get("consumer", {}).get("displayName", ""), "rating": rv.get("rating", 0), "date": rv.get("createdAt", "")})
+            if len(reviews) >= 300:
+                break
+            # Stop if last page
+            total = data.get("pagination", {}).get("totalReviews", 0)
+            if total and len(reviews) >= total:
+                break
+            time.sleep(0.3)
         except Exception:
-            pass
-
+            break
     return reviews
 
 
@@ -317,6 +323,31 @@ def _parse_generic(soup):
     return reviews[:300]
 
 
+# ── PAGE URL BUILDER ─────────────────────────────────────────────────────────
+def _build_page_urls(url, domain, max_pages=12):
+    """Generate paginated URLs for common review sites."""
+    pages = []
+    if "amazon." in domain:
+        base = re.sub(r'[?&]pageNumber=\d+', '', url)
+        sep = '&' if '?' in base else '?'
+        for p in range(2, max_pages + 1):
+            pages.append(f"{base}{sep}pageNumber={p}")
+    elif "yelp.com" in domain:
+        base = re.sub(r'[?&]start=\d+', '', url)
+        sep = '&' if '?' in base else '?'
+        for p in range(1, max_pages):
+            pages.append(f"{base}{sep}start={p*20}")
+    elif "tripadvisor." in domain:
+        for p in range(1, max_pages):
+            paged = re.sub(r'-or\d+', '', url)
+            pages.append(paged.replace('.html', f'-or{p*10}.html'))
+    else:
+        base = re.sub(r'[?&](page|p)=\d+', '', url)
+        sep = '&' if '?' in base else '?'
+        for p in range(2, max_pages + 1):
+            pages.append(f"{base}{sep}page={p}")
+    return pages[:max_pages]
+
 # ── MAIN ENTRY ────────────────────────────────────────────────────────────────
 def scrape_reviews(url: str) -> dict:
     url = url.strip()
@@ -341,26 +372,54 @@ def scrape_reviews(url: str) -> dict:
             "method": method
         }
 
-    soup = BeautifulSoup(html, "lxml")
-    for el in soup(["script","style","nav","header","footer","aside","noscript","iframe"]):
-        el.decompose()
+    def _parse_html(html_content):
+        s = BeautifulSoup(html_content, "lxml")
+        for el in s(["script","style","nav","header","footer","aside","noscript","iframe"]):
+            el.decompose()
+        if "trustpilot.com" in domain:
+            r = _parse_trustpilot(s)
+        elif "amazon." in domain:
+            r = _parse_amazon(s)
+        elif "yelp.com" in domain:
+            r = _parse_yelp(s)
+        elif "google.com/maps" in url or "maps.google" in url:
+            r = _parse_google_maps(s)
+        else:
+            r = []
+        if not r: r = _parse_json_ld(s)
+        if not r: r = _parse_generic(s)
+        return r
 
-    reviews = []
-    if "trustpilot.com" in domain:
-        reviews = _parse_trustpilot(soup)
-    elif "amazon." in domain:
-        reviews = _parse_amazon(soup)
-    elif "yelp.com" in domain:
-        reviews = _parse_yelp(soup)
-    elif "google.com/maps" in url or "maps.google" in url:
-        reviews = _parse_google_maps(soup)
+    # Parse first page
+    all_reviews = _parse_html(html)
+    seen_texts  = {rv["text"][:80] for rv in all_reviews}
 
-    if not reviews:
-        reviews = _parse_json_ld(soup)
-    if not reviews:
-        reviews = _parse_generic(soup)
+    # Paginate — keep fetching until we have 300 or run out of pages
+    if len(all_reviews) < 300:
+        page_urls = _build_page_urls(url, domain, max_pages=12)
+        for purl in page_urls:
+            if len(all_reviews) >= 300:
+                break
+            phtml, perr = _fetch_direct(purl)
+            if not phtml and WEBSCRAPING_AI_KEY:
+                phtml, perr = _fetch_via_webscrapingai(purl, render_js=True)
+            if not phtml:
+                break  # no more pages accessible
+            page_reviews = _parse_html(phtml)
+            if not page_reviews:
+                break  # empty page means we hit the end
+            added = 0
+            for rv in page_reviews:
+                key = rv["text"][:80]
+                if key not in seen_texts:
+                    seen_texts.add(key)
+                    all_reviews.append(rv)
+                    added += 1
+            if added == 0:
+                break  # duplicate page = end of reviews
+            time.sleep(0.4)
 
-    if not reviews:
+    if not all_reviews:
         return {
             "scraped": False, "reviews": [], "count": 0,
             "error": "no_reviews_found",
@@ -370,7 +429,7 @@ def scrape_reviews(url: str) -> dict:
             "method": method,
         }
 
-    cleaned = [{"text": re.sub(r'\s+', ' ', rv["text"].strip()), **{k:v for k,v in rv.items() if k != "text"}} for rv in reviews if len(rv.get("text","").strip()) > 15]
+    cleaned = [{"text": re.sub(r'\s+', ' ', rv["text"].strip()), **{k:v for k,v in rv.items() if k != "text"}} for rv in all_reviews if len(rv.get("text","").strip()) > 15]
     via = f" via {method}" if method != "direct" else ""
     return {
         "scraped": True,
