@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react'
+import { Eye, EyeOff, Loader2, AlertCircle, ArrowLeft } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { Auth } from '../utils/api'
 import { useApp } from '../contexts/AppContext'
@@ -23,7 +23,7 @@ export default function Login() {
       const r = await Auth.login(form.username, form.password)
       login(r.data.token, r.data)
       toast.success(`Welcome back, ${r.data.username}!`)
-      navigate('/')
+      navigate('/app')   // ← changed from '/' to '/app'
     } catch(e) {
       setError(e.response?.data?.detail || 'Invalid username or password')
     } finally { setLoading(false) }
@@ -37,6 +37,14 @@ export default function Login() {
       </div>
       <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:.4}}
         className="w-full max-w-sm relative">
+
+        {/* Back to home */}
+        <Link to="/"
+          className="flex items-center gap-1.5 text-sm text-[var(--muted)] hover:text-[var(--text)] mb-6 w-fit transition-colors"
+        >
+          <ArrowLeft size={14} /> Back to home
+        </Link>
+
         <div className="text-center mb-8">
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[var(--brand3)] to-[var(--brand)] flex items-center justify-center mx-auto mb-4 shadow-xl" style={{boxShadow:'0 0 32px var(--glow)'}}>
             <span className="text-white font-display font-bold text-2xl">N</span>

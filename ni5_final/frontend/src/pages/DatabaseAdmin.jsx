@@ -27,7 +27,7 @@ export default function DatabaseAdmin() {
   useEffect(() => {
     if (user && user.role !== 'admin') {
       toast.error('Admin access required')
-      navigate('/')
+      navigate('/app')
     }
   }, [user])
 

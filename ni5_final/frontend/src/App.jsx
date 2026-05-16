@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { useApp } from './contexts/AppContext'
 import Layout from './components/Layout'
 
+import Landing  from './pages/Landing'
 import Login    from './pages/Login'
 import Register from './pages/Register'
 
@@ -30,7 +31,7 @@ function AdminGuard({ children }) {
   const { token, user, loading } = useApp()
   if (loading) return null
   if (!token) return <Navigate to="/login" replace />
-  if (user?.role !== 'admin') return <Navigate to="/" replace />
+  if (user?.role !== 'admin') return <Navigate to="/app" replace />
   return children
 }
 
@@ -54,9 +55,15 @@ function Guard({ children }) {
 export default function App() {
   return (
     <Routes>
+      {/* ── Public landing page ── */}
+      <Route path="/" element={<Landing />} />
+
+      {/* ── Auth pages ── */}
       <Route path="/login"    element={<Login />} />
       <Route path="/register" element={<Register />} />
-      <Route path="/" element={<Guard><Layout /></Guard>}>
+
+      {/* ── Protected app (dashboard + all inner pages) ── */}
+      <Route path="/app" element={<Guard><Layout /></Guard>}>
         <Route index                  element={<Dashboard />} />
         <Route path="analyze"         element={<Analyze />} />
         <Route path="text"            element={<SingleText />} />
@@ -71,12 +78,17 @@ export default function App() {
         <Route path="profile"         element={<Profile />} />
         <Route path="database"        element={<DatabaseAdmin />} />
         <Route path="insights/:id"    element={<Insights />} />
-        <Route path="studio"            element={<ReviewStudio />} />
-        <Route path="bi"                element={<BIHub />} />
-        <Route path="global"            element={<GlobalIntelligence />} />
-        <Route path="workflow"         element={<AdminGuard><Workflow /></AdminGuard>} />
-        <Route path="*"               element={<Navigate to="/" />} />
+        <Route path="studio"          element={<ReviewStudio />} />
+        <Route path="bi"              element={<BIHub />} />
+        <Route path="global"          element={<GlobalIntelligence />} />
+        <Route path="brand-health"    element={<BrandHealth />} />
+        <Route path="benchmark"       element={<Benchmark />} />
+        <Route path="workflow"        element={<AdminGuard><Workflow /></AdminGuard>} />
+        <Route path="*"              element={<Navigate to="/app" />} />
       </Route>
+
+      {/* ── Fallback ── */}
+      <Route path="*" element={<Navigate to="/" />} />
     </Routes>
   )
 }

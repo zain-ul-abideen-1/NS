@@ -292,3 +292,32 @@ body{
 .light button[style*="grad"] *{
   color:#ffffff !important;
 }
+/* ─────────────────────────────────────────────────────────────────────
+   LANDING PAGE — always white/light regardless of dark/light toggle
+   Add this block at the very BOTTOM of your existing index.css
+   ───────────────────────────────────────────────────────────────────── */
+
+/* Force white bg when landing page mounts (set via JS in Landing.jsx) */
+body.landing-active {
+  background: #ffffff !important;
+}
+
+/* Landing-page section transitions */
+.landing-section {
+  scroll-margin-top: 64px;
+}
+
+/* Smooth anchor scroll already handled by html{scroll-behavior:smooth} above */
+
+/* Auth pages — keep the "back to home" arrow link clean */
+a.back-home {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: .875rem;
+  color: var(--muted);
+  text-decoration: none;
+  margin-bottom: 1.5rem;
+  transition: color .15s;
+}
+a.back-home:hover { color: var(--text); }
