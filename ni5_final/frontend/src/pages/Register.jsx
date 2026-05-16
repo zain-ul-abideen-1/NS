@@ -23,7 +23,7 @@ export default function Register() {
       const r = await Auth.register(form.username, form.email, form.password)
       login(r.data.token, r.data)
       toast.success('Account created!')
-      navigate('/app')   // ← changed from '/' to '/app'
+      navigate('/dashboard')
     } catch(e) {
       setError(e.response?.data?.detail || 'Registration failed')
     } finally { setLoading(false) }
@@ -37,10 +37,7 @@ export default function Register() {
       </div>
       <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} className="w-full max-w-sm relative">
 
-        {/* Back to home */}
-        <Link to="/"
-          className="flex items-center gap-1.5 text-sm text-[var(--muted)] hover:text-[var(--text)] mb-6 w-fit transition-colors"
-        >
+        <Link to="/" className="flex items-center gap-1.5 text-sm text-[var(--muted)] hover:text-[var(--text)] mb-6 w-fit transition-colors">
           <ArrowLeft size={14} /> Back to home
         </Link>
 

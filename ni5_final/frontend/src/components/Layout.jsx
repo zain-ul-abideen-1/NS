@@ -19,8 +19,9 @@ export default function Layout() {
   const [groqOpen,    setGroqOpen]    = useState(false)
   const navigate = useNavigate()
 
+  // All paths now use /dashboard as the index instead of /
   const NAV_TOP = [
-    { to:'/',          icon:LayoutDashboard, label:'Dashboard'   },
+    { to:'/dashboard', icon:LayoutDashboard, label:'Dashboard'   },
     { to:'/analyze',   icon:Search,          label:'Analyze'     },
     { to:'/text',      icon:Type,            label:'Single Text' },
   ]
@@ -47,7 +48,7 @@ export default function Layout() {
 
   function NavItem({ to, icon:Icon, label }) {
     return (
-      <NavLink to={to} end={to === '/'}
+      <NavLink to={to}
         onClick={() => setMobileOpen(false)}
         title={collapsed ? label : ''}
         className={({ isActive }) =>

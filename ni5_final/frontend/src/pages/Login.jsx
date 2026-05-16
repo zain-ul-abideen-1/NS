@@ -23,7 +23,7 @@ export default function Login() {
       const r = await Auth.login(form.username, form.password)
       login(r.data.token, r.data)
       toast.success(`Welcome back, ${r.data.username}!`)
-      navigate('/app')   // ← changed from '/' to '/app'
+      navigate('/dashboard')
     } catch(e) {
       setError(e.response?.data?.detail || 'Invalid username or password')
     } finally { setLoading(false) }
@@ -38,10 +38,7 @@ export default function Login() {
       <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:.4}}
         className="w-full max-w-sm relative">
 
-        {/* Back to home */}
-        <Link to="/"
-          className="flex items-center gap-1.5 text-sm text-[var(--muted)] hover:text-[var(--text)] mb-6 w-fit transition-colors"
-        >
+        <Link to="/" className="flex items-center gap-1.5 text-sm text-[var(--muted)] hover:text-[var(--text)] mb-6 w-fit transition-colors">
           <ArrowLeft size={14} /> Back to home
         </Link>
 
