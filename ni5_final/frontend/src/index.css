@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -31,32 +31,37 @@
   --grad-brand: linear-gradient(135deg,#0EA5E9,#38BDF8,#7DD3FC);
 }
 
-/* ── LIGHT: white dominant, dark navy accents ─────────────────────── */
+/* ── LIGHT: Poppins · landing-page palette (#1078c2 blue · #59d12a green) ── */
 .light {
-  --bg:      #F4F7FB;
-  --bg2:     #FFFFFF;
-  --card:    #FFFFFF;
-  --card2:   #EFF3F9;
-  --border:  #D8E2EE;
-  --border2: #C0CFE0;
-  --text:    #0A1628;
-  --text2:   #1E3A5A;
-  --muted:   #4A6880;
-  --dim:     #B8CCE0;
+  /* Backgrounds — clean white like the landing */
+  --bg:      #f7fafd;
+  --bg2:     #ffffff;
+  --card:    #ffffff;
+  --card2:   #f0f5fb;
+  --border:  #e2eaf3;
+  --border2: #cddaec;
 
-  --brand:   #1350A0;
-  --brand2:  #1A6ACC;
-  --brand3:  #0D3C7A;
-  --green:   #0A7A40;
-  --red:     #C01818;
-  --amber:   #92520A;
-  --blue:    #1549A0;
-  --purple:  #5B1AB8;
+  /* Text */
+  --text:    #0c1a28;
+  --text2:   #2d4a63;
+  --muted:   #6b8aa8;
+  --dim:     #b0c4d8;
 
-  --glow:    rgba(19,80,160,0.12);
-  --glow2:   rgba(19,80,160,0.06);
-  --grad:    linear-gradient(135deg,#0D3C7A,#1350A0,#1A6ACC);
-  --grad-brand: linear-gradient(135deg,#0D3C7A,#1350A0,#1A6ACC);
+  /* Brand — landing-page blue & green */
+  --brand:   #1078c2;
+  --brand2:  #1a8fd1;
+  --brand3:  #0a5a99;
+  --green:   #3aab12;
+  --red:     #d02020;
+  --amber:   #b86a00;
+  --blue:    #1078c2;
+  --purple:  #6626c8;
+
+  /* Glow / gradients */
+  --glow:    rgba(16,120,194,0.14);
+  --glow2:   rgba(16,120,194,0.06);
+  --grad:    linear-gradient(135deg,#1078c2,#1a8fd1);
+  --grad-brand: linear-gradient(135deg,#1078c2,#59d12a);
 }
 
 /* Reset */
@@ -69,10 +74,20 @@ body{
   min-height:100vh;
   transition:background .25s,color .25s;
 }
+
+/* In light mode, swap to Poppins for the whole UI */
+.light body,
+.light {
+  font-family:'Poppins','DM Sans',sans-serif;
+}
+
 [dir=rtl]{text-align:right}
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:99px}
+
+/* Light mode scrollbar */
+.light ::-webkit-scrollbar-thumb{background:#c5d6e8}
 
 @layer components{
 
@@ -86,6 +101,14 @@ body{
     background:var(--card2);
     border:1px solid var(--border2);
     border-radius:.75rem;
+  }
+
+  /* Light card subtle shadow */
+  .light .card{
+    box-shadow:0 1px 4px rgba(16,120,194,.06);
+  }
+  .light .card2{
+    box-shadow:0 1px 3px rgba(16,120,194,.04);
   }
 
   /* ── Typography ── */
@@ -104,11 +127,18 @@ body{
     font-size:.875rem;
     color:var(--text);
   }
+  .light .section-title{
+    font-family:'Poppins',sans-serif;
+  }
   .page-title{
     font-family:'Syne',sans-serif;
     font-weight:800;
     font-size:1.5rem;
     color:var(--text);
+  }
+  .light .page-title{
+    font-family:'Poppins',sans-serif;
+    font-weight:700;
   }
 
   /* ── Inputs ── */
@@ -129,15 +159,18 @@ body{
   textarea.input{resize:vertical}
   select.input option{background:var(--card);color:var(--text)}
 
-  /* Light mode input overrides */
   .light .input{
-    background:#FFFFFF;
-    border-color:#C8D8EC;
-    color:#0A1628;
+    background:#ffffff;
+    border-color:#d4e3f0;
+    color:#0c1a28;
+    font-family:'Poppins','DM Sans',sans-serif;
   }
-  .light .input::placeholder{color:#7090B0}
-  .light .input:focus{border-color:#1350A0;box-shadow:0 0 0 3px rgba(19,80,160,0.10)}
-  .light select.input option{background:#FFFFFF;color:#0A1628}
+  .light .input::placeholder{color:#8aabca}
+  .light .input:focus{
+    border-color:#1078c2;
+    box-shadow:0 0 0 3px rgba(16,120,194,.12);
+  }
+  .light select.input option{background:#ffffff;color:#0c1a28}
 
   /* ── Buttons ── */
   .btn-primary{
@@ -153,6 +186,18 @@ body{
   .btn-primary:hover:not(:disabled){opacity:.88;transform:translateY(-1px);box-shadow:0 4px 20px var(--glow)}
   .btn-primary:disabled{opacity:.4;cursor:not-allowed;transform:none}
 
+  .light .btn-primary{
+    font-family:'Poppins',sans-serif;
+    font-weight:600;
+    background:linear-gradient(135deg,#1078c2,#1a8fd1);
+    box-shadow:0 4px 14px rgba(16,120,194,.28);
+  }
+  .light .btn-primary:hover:not(:disabled){
+    box-shadow:0 6px 20px rgba(16,120,194,.4);
+    opacity:1;
+    transform:translateY(-1px);
+  }
+
   .btn-secondary{
     display:inline-flex;align-items:center;gap:.4rem;
     background:var(--card2);color:var(--text);
@@ -162,8 +207,13 @@ body{
     transition:all .2s;
   }
   .btn-secondary:hover{background:var(--border);border-color:var(--border2)}
-  .light .btn-secondary{background:#FFFFFF;color:#0A1628;border-color:#C0CFE0}
-  .light .btn-secondary:hover{background:#EFF3F9}
+  .light .btn-secondary{
+    background:#ffffff;
+    color:#0c1a28;
+    border-color:#d4e3f0;
+    font-family:'Poppins',sans-serif;
+  }
+  .light .btn-secondary:hover{background:#f0f5fb;border-color:#1078c2}
 
   .btn-ghost{
     display:inline-flex;align-items:center;gap:.35rem;
@@ -173,7 +223,7 @@ body{
     transition:all .15s;
   }
   .btn-ghost:hover{color:var(--text);background:var(--border)}
-  .light .btn-ghost:hover{color:#0A1628;background:#E5EDF6}
+  .light .btn-ghost:hover{color:#0c1a28;background:#e8f0f9}
 
   .btn-danger{
     display:inline-flex;align-items:center;gap:.4rem;
@@ -198,12 +248,12 @@ body{
   .badge-blue{background:rgba(96,165,250,.1);color:var(--blue);border:1px solid rgba(96,165,250,.25)}
   .badge-gray{background:var(--card2);color:var(--muted);border:1px solid var(--border2)}
 
-  .light .badge-pos{background:rgba(0,144,58,.08);color:#006628;border-color:rgba(0,144,58,.3)}
-  .light .badge-neg{background:rgba(192,24,24,.08);color:#A01010;border-color:rgba(192,24,24,.3)}
-  .light .badge-neu{background:rgba(19,80,160,.07);color:#1350A0;border-color:rgba(19,80,160,.2)}
-  .light .badge-amb{background:rgba(146,82,10,.07);color:#7A4408;border-color:rgba(146,82,10,.2)}
-  .light .badge-blue{background:rgba(21,73,160,.07);color:#1549A0;border-color:rgba(21,73,160,.2)}
-  .light .badge-gray{background:#EFF3F9;color:#4A6880;border-color:#C0CFE0}
+  .light .badge-pos{background:rgba(58,171,18,.08);color:#2a7d0a;border-color:rgba(58,171,18,.28)}
+  .light .badge-neg{background:rgba(208,32,32,.08);color:#b01818;border-color:rgba(208,32,32,.28)}
+  .light .badge-neu{background:rgba(16,120,194,.08);color:#1078c2;border-color:rgba(16,120,194,.22)}
+  .light .badge-amb{background:rgba(184,106,0,.08);color:#945500;border-color:rgba(184,106,0,.22)}
+  .light .badge-blue{background:rgba(16,120,194,.08);color:#1078c2;border-color:rgba(16,120,194,.2)}
+  .light .badge-gray{background:#f0f5fb;color:#6b8aa8;border-color:#d4e3f0}
 
   /* ── Tabs ── */
   .tab-btn{
@@ -214,7 +264,8 @@ body{
   }
   .tab-btn:hover{color:var(--text);background:var(--border)}
   .tab-active{background:var(--grad) !important;color:#fff !important}
-  .light .tab-btn:hover{color:#0A1628;background:#E5EDF6}
+  .light .tab-btn:hover{color:#0c1a28;background:#e8f0f9}
+  .light .tab-active{background:linear-gradient(135deg,#1078c2,#1a8fd1) !important;}
 
   /* ── Priority badges ── */
   .pri-critical{background:rgba(248,113,113,.1);color:#C01818;border:1px solid rgba(220,38,38,.25)}
@@ -222,10 +273,10 @@ body{
   .pri-medium{background:rgba(56,189,248,.1);color:var(--brand);border:1px solid rgba(56,189,248,.2)}
   .pri-low{background:rgba(52,211,153,.1);color:#00903A;border:1px solid rgba(52,211,153,.2)}
 
-  .light .pri-critical{background:rgba(192,24,24,.07);color:#A01010;border-color:rgba(192,24,24,.2)}
-  .light .pri-high{background:rgba(146,82,10,.07);color:#7A4408;border-color:rgba(146,82,10,.2)}
-  .light .pri-medium{background:rgba(19,80,160,.07);color:#1350A0;border-color:rgba(19,80,160,.15)}
-  .light .pri-low{background:rgba(0,144,58,.07);color:#006628;border-color:rgba(0,144,58,.2)}
+  .light .pri-critical{background:rgba(208,32,32,.07);color:#b01818;border-color:rgba(208,32,32,.2)}
+  .light .pri-high{background:rgba(184,106,0,.07);color:#945500;border-color:rgba(184,106,0,.2)}
+  .light .pri-medium{background:rgba(16,120,194,.07);color:#1078c2;border-color:rgba(16,120,194,.18)}
+  .light .pri-low{background:rgba(58,171,18,.07);color:#2a7d0a;border-color:rgba(58,171,18,.2)}
 
   /* ── Skeleton ── */
   .skeleton,.Skel{
@@ -235,6 +286,12 @@ body{
     border-radius:.5rem;
   }
   @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+  .light .skeleton,.light .Skel{
+    background:linear-gradient(90deg,#e8f0f9 25%,#d4e3f0 50%,#e8f0f9 75%);
+    background-size:200% 100%;
+  }
+
   .divider{height:1px;background:var(--border)}
 
   /* ── AI insight block ── */
@@ -246,78 +303,83 @@ body{
     padding:1rem 1.25rem;
   }
   .light .ai-insight-block{
-    background:#F0F6FF;
-    border-color:#B8D0F0;
-    border-left-color:#1350A0;
+    background:#eef5fd;
+    border-color:#c8dff5;
+    border-left-color:#1078c2;
   }
-  .light .ai-insight-block p{color:#1E3A5A}
+  .light .ai-insight-block p{color:#1e3a5a}
 
   /* ── Sidebar nav ── */
-  .light aside{background:#FFFFFF;border-color:#D8E2EE}
+  .light aside{
+    background:#ffffff;
+    border-color:#e2eaf3;
+  }
   .light .nav-item-active{background:var(--grad) !important;color:#fff !important}
+
+  /* Light sidebar nav item hover */
+  .light nav a:not([class*="text-white"]):hover,
+  .light nav button:not([class*="text-white"]):hover{
+    background:#eef5fd;
+    color:#0c1a28;
+  }
 
   /* ── Form areas (dropzone etc.) ── */
   .light [class*="dropzone"],
   .light [class*="border-dashed"]{
-    background:#FAFCFF;
-    border-color:#C0CFE0;
+    background:#fafcff;
+    border-color:#c8dff5;
   }
 
   /* ── Table rows hover ── */
-  .light tr:hover td{background:#F0F6FF !important}
+  .light tr:hover td{background:#eef5fd !important}
 
-  /* ── Score bar background in light mode ── */
-  .light .score-bar-bg{background:#DCE8F5}
+  /* ── Score bar background ── */
+  .light .score-bar-bg{background:#d4e8f8}
 
-  /* ── Code/mono text ── */
-  .light .font-mono{color:#1E3A5A}
+  /* ── Code/mono ── */
+  .light .font-mono{color:#1e3a5a}
+
+  /* ── Auth page background ── */
+  .light .auth-bg{
+    background:radial-gradient(ellipse at 20% 20%,rgba(16,120,194,.06) 0%,transparent 60%),
+               radial-gradient(ellipse at 80% 80%,rgba(89,209,42,.05) 0%,transparent 60%),
+               #f7fafd;
+  }
 }
 
 /* ── Recharts override ── */
 .recharts-cartesian-axis-tick-value{fill:var(--muted) !important;font-size:11px !important}
 .recharts-tooltip-wrapper{outline:none !important}
-.light .recharts-cartesian-axis-tick-value{fill:#4A6880 !important}
+.light .recharts-cartesian-axis-tick-value{fill:#6b8aa8 !important}
 
-/* ── Light mode strong overrides for text visibility ── */
-.light p,.light span,.light h1,.light h2,.light h3,.light h4,.light div{
-  /* Only override where color isn't explicitly set */
-}
-.light .text-\[var\(--text\)\]{color:#0A1628}
-.light .text-\[var\(--text2\)\]{color:#1E3A5A}
-.light .text-\[var\(--muted\)\]{color:#4A6880}
-.light .text-\[var\(--dim\)\]{color:#7090B0}
+/* ── Light mode text color utilities ── */
+.light .text-\[var\(--text\)\]{color:#0c1a28}
+.light .text-\[var\(--text2\)\]{color:#2d4a63}
+.light .text-\[var\(--muted\)\]{color:#6b8aa8}
+.light .text-\[var\(--dim\)\]{color:#9ab8d0}
 
-/* Ensure nav active items always have white text */
+/* ── Light mode background utilities ── */
+.light .bg-\[var\(--bg\)\]{background:#f7fafd}
+.light .bg-\[var\(--card\)\]{background:#ffffff}
+.light .bg-\[var\(--card2\)\]{background:#f0f5fb}
+
+/* ── Active gradient items always white text ── */
 .light a[style*="grad"] *,
 .light button[style*="grad"] *{
   color:#ffffff !important;
 }
-/* ─────────────────────────────────────────────────────────────────────
-   LANDING PAGE — always white/light regardless of dark/light toggle
-   Add this block at the very BOTTOM of your existing index.css
-   ───────────────────────────────────────────────────────────────────── */
 
-/* Force white bg when landing page mounts (set via JS in Landing.jsx) */
-body.landing-active {
-  background: #ffffff !important;
+/* ── Green accent highlights in light mode ── */
+.light [style*="#59d12a"]{color:#3aab12 !important}
+.light [style*="59d12a"]{color:#3aab12 !important}
+
+/* ── Poppins applied to display/heading elements in light mode ── */
+.light h1,.light h2,.light h3,.light h4,.light h5{
+  font-family:'Poppins','Syne',sans-serif;
 }
-
-/* Landing-page section transitions */
-.landing-section {
-  scroll-margin-top: 64px;
+.light .font-display,.light [class*="font-display"]{
+  font-family:'Poppins','Syne',sans-serif;
 }
-
-/* Smooth anchor scroll already handled by html{scroll-behavior:smooth} above */
-
-/* Auth pages — keep the "back to home" arrow link clean */
-a.back-home {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: .875rem;
-  color: var(--muted);
-  text-decoration: none;
-  margin-bottom: 1.5rem;
-  transition: color .15s;
+.light p,.light span,.light label,.light button,.light input,.light textarea,.light select{
+  font-family:'Poppins','DM Sans',sans-serif;
 }
-a.back-home:hover { color: var(--text); }

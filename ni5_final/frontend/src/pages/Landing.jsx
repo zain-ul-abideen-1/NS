@@ -5,7 +5,7 @@ import {
   Brain, Globe, TrendingUp, MessageSquare, Target, Zap, LineChart, Bell,
   Star, ArrowRight, CheckCircle2, ChevronDown, Sparkles, Play,
   BarChart3, Shield, Users, Building2, Award, Layers,
-  ArrowUpRight, Menu, X, ChevronRight
+  ArrowUpRight, Menu, X, ChevronRight, Hash, Clock, GitCompare
 } from 'lucide-react'
 
 /* ─── Poppins font injected via style tag ───────────────────────── */
@@ -31,14 +31,48 @@ const C = {
 
 /* ─── Data ──────────────────────────────────────────────────────── */
 const FEATURES = [
-  { icon:Brain,        color:C.blue,  bg:C.blueLt,  title:'AI Sentiment Engine',     body:'State-of-the-art NLP models trained on 50M+ reviews classify sentiment, emotion and intent in real time.' },
-  { icon:Globe,        color:C.green, bg:C.greenLt, title:'Global Intelligence',      body:'Aggregate reviews from any country, language or platform. 140+ sources, one unified feed.' },
-  { icon:TrendingUp,   color:C.blue,  bg:C.blueLt,  title:'Trend Detection',          body:'Surface emerging issues or viral praise before they explode. Anomaly alerts fire the moment patterns shift.' },
-  { icon:MessageSquare,color:C.green, bg:C.greenLt, title:'Review Studio',            body:'AI-drafted responses that sound human. Schedule, approve and publish across every channel at once.' },
-  { icon:Target,       color:C.blue,  bg:C.blueLt,  title:'Brand Health Score',       body:'One composite metric combining sentiment, volume, velocity and competitive context — updated hourly.' },
-  { icon:Zap,          color:C.green, bg:C.greenLt, title:'Auto Ticketing',           body:'Convert negative reviews into support tickets with priority scores, routing rules and resolution hints.' },
-  { icon:BarChart3,    color:C.blue,  bg:C.blueLt,  title:'BI Hub',                   body:'Pre-built dashboards, cohort analysis and white-label PDF exports your clients will actually read.' },
-  { icon:Bell,         color:C.green, bg:C.greenLt, title:'Watchlist Alerts',         body:'Pin any brand, keyword or competitor. Get notified the instant their trajectory changes.' },
+  // Core AI
+  { icon:Brain,        color:C.blue,  bg:C.blueLt,  title:'AI Sentiment Engine',        body:'State-of-the-art NLP models classify sentiment, emotion and intent across reviews, tickets and free text in real time.' },
+  { icon:Sparkles,     color:C.green, bg:C.greenLt, title:'Single Text Analyser',       body:'Paste any text — review, tweet, support message — and get instant sentiment score, keywords, emotion tags and a helpfulness rating.' },
+  { icon:Layers,       color:C.blue,  bg:C.blueLt,  title:'Batch Review Analysis',      body:'Upload a CSV or paste a list of hundreds of reviews. NestInsights processes all of them in parallel with full AI scoring.' },
+  { icon:Globe,        color:C.green, bg:C.greenLt, title:'URL Scraping',               body:'Drop a product page, Trustpilot listing or Yelp profile URL — we scrape and analyse all visible reviews automatically.' },
+  // Intelligence
+  { icon:TrendingUp,   color:C.blue,  bg:C.blueLt,  title:'Trend Detection',            body:'Surface emerging issues or viral praise before they explode. Anomaly alerts fire the moment patterns deviate from baseline.' },
+  { icon:Target,       color:C.green, bg:C.greenLt, title:'Brand Health Score',         body:'One composite metric combining sentiment, volume, velocity and competitive context — recalculated hourly.' },
+  { icon:BarChart3,    color:C.blue,  bg:C.blueLt,  title:'Global Product Intelligence',body:'AI scans live global headlines and detects demand signals for products by category, region and urgency — with margin estimates.' },
+  { icon:Globe,        color:C.green, bg:C.greenLt, title:'Regional Intelligence',      body:'See sentiment, demand and review volume broken down by continent and country. Identify where your brand resonates most.' },
+  // Studio & Publishing
+  { icon:MessageSquare,color:C.blue,  bg:C.blueLt,  title:'Review Studio',              body:'AI-drafted responses that sound human. Bulk-reply, approve, refine and schedule across every channel at scale.' },
+  { icon:Zap,          color:C.green, bg:C.greenLt, title:'AI Chat (Groq Assistant)',   body:'Ask anything about your review data in natural language. The Groq-powered assistant answers instantly from your sessions.' },
+  // Ticketing
+  { icon:Bell,         color:C.blue,  bg:C.blueLt,  title:'Smart Ticket Engine',        body:'Converts negative reviews and support messages into prioritised tickets with routing rules, urgency scores and resolution hints.' },
+  { icon:CheckCircle2, color:C.green, bg:C.greenLt, title:'Ticket Deep Dive',           body:'Full ticket history, conversation threading, status tracking, and exportable ticket reports with resolution analytics.' },
+  // Sessions & History
+  { icon:Clock,        color:C.blue,  bg:C.blueLt,  title:'Session History',            body:'Every analysis run is saved as a session with full replay. Compare sessions side-by-side across any time range.' },
+  { icon:GitCompare,   color:C.green, bg:C.greenLt, title:'Session Comparison',         body:'Select any two or more sessions and run a structured diff — sentiment delta, keyword shifts, fake review change.' },
+  { icon:Star,         color:C.blue,  bg:C.blueLt,  title:'Session Deep Dive',          body:'Persona analysis, risk flags, co-occurrence maps, sentiment heatmaps, NPS simulation and quality reports per session.' },
+  // Analytics
+  { icon:BarChart3,    color:C.green, bg:C.greenLt, title:'BI Hub',                     body:'Pre-built dashboards with cohort analysis, topic clustering and white-label PDF/CSV exports your clients will love.' },
+  { icon:TrendingUp,   color:C.blue,  bg:C.blueLt,  title:'Keyword Trends',             body:'Track any keyword or topic across time. See volume, sentiment trajectory and cross-session frequency charts.' },
+  { icon:Users,        color:C.green, bg:C.greenLt, title:'Persona Intelligence',       body:'AI clusters reviewers into persona archetypes — power users, one-timers, detractors — with tailored response guidance.' },
+  // Trust & Integrity
+  { icon:Shield,       color:C.blue,  bg:C.blueLt,  title:'Fake Review Detection',      body:'ML model trained to flag astroturfed, bot-generated or incentivised reviews with confidence scores and evidence flags.' },
+  { icon:Hash,         color:C.green, bg:C.greenLt, title:'Hash Verification',          body:'Cryptographically hash any review or text and verify its authenticity. Tamper-proof audit trail for compliance use cases.' },
+  // Watchlist & Alerts
+  { icon:Bell,         color:C.blue,  bg:C.blueLt,  title:'Watchlist Monitoring',       body:'Pin any brand, URL, keyword or competitor. Scheduled scraping with automatic sentiment scoring every time new reviews land.' },
+  { icon:Zap,          color:C.green, bg:C.greenLt, title:'Smart Alert Rules',          body:'Define threshold-based alerts — negative surge, sentiment drop, review flood, rating floor — and get notified instantly.' },
+  // Competitor & Benchmarking
+  { icon:Target,       color:C.blue,  bg:C.blueLt,  title:'Competitor Benchmarking',    body:'Track competitor sentiment scores, review velocity and rating trends in one view. Know when they slip — or surge.' },
+  { icon:BarChart3,    color:C.green, bg:C.greenLt, title:'Source Blender',             body:'Aggregate ratings from Trustpilot, Amazon, Google and more with weighted blending to create a single composite score.' },
+  // Tools
+  { icon:Brain,        color:C.blue,  bg:C.blueLt,  title:'20-Tool Workspace',          body:'Built-in tools: ROI calculator, budget tracker, NPS calculator, goal tracker, AI reply generator, report builder and more.' },
+  { icon:Building2,    color:C.green, bg:C.greenLt, title:'Store Integrations',         body:'Step-by-step integration guides for Shopify, WooCommerce, Trustpilot, Amazon SP-API and Google Reviews with real API docs.' },
+  // Admin & Workflow
+  { icon:Shield,       color:C.blue,  bg:C.blueLt,  title:'Workflow Automation',        body:'Admin-only workflow builder to automate repetitive tasks: tag sessions, route tickets, trigger alerts and generate digests.' },
+  { icon:Users,        color:C.green, bg:C.greenLt, title:'Multi-User & Roles',         body:'Role-based access control with admin and analyst roles. Team collaboration with per-user preferences and history.' },
+  // Export & Digest
+  { icon:ArrowRight,   color:C.blue,  bg:C.blueLt,  title:'Export Everywhere',          body:'Export any session, chart or report as CSV, JSON or HTML. One-click share links for stakeholders who don\'t log in.' },
+  { icon:Sparkles,     color:C.green, bg:C.greenLt, title:'AI Digest Reports',          body:'Schedule weekly or monthly AI-generated executive digests summarising performance across all your tracked brands.' },
 ]
 
 const STEPS = [
@@ -457,10 +491,11 @@ function Features() {
         <InView style={{ textAlign:'center', marginBottom:72 }}>
           <span style={{ ...P, display:'inline-block', padding:'5px 16px', borderRadius:999, background:C.blueLt, border:`1px solid ${C.blue}28`, fontSize:12, fontWeight:700, color:C.blue, marginBottom:18, textTransform:'uppercase', letterSpacing:'.06em' }}>Platform Features</span>
           <h2 style={{ ...P, fontWeight:800, fontSize:'clamp(1.9rem,4vw,3rem)', color:C.dark, letterSpacing:'-.025em', marginBottom:16, lineHeight:1.15 }}>
-            Eight modules. One intelligence layer.
+            Every tool you need to master<br/>
+            <span style={{ color:C.blue }}>customer intelligence.</span>
           </h2>
-          <p style={{ ...P, fontSize:16, color:C.gray500, maxWidth:500, margin:'0 auto', lineHeight:1.75 }}>
-            Everything you need to turn unstructured feedback into clear competitive advantage.
+          <p style={{ ...P, fontSize:16, color:C.gray500, maxWidth:560, margin:'0 auto', lineHeight:1.75 }}>
+            30 features across AI analysis, brand monitoring, ticketing, global intelligence and team tools — all in one platform.
           </p>
         </InView>
 
